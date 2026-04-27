@@ -4,8 +4,10 @@ import com.quartermaster.Main;
 import com.quartermaster.auth.SessionManager;
 import com.quartermaster.auth.UserRole;
 import com.quartermaster.dao.EquipmentDao;
+import com.quartermaster.dao.EquipmentCategoryDao;
 import com.quartermaster.dao.IssuanceDao;
 import com.quartermaster.dao.OfficerDao;
+import com.quartermaster.dao.UserDao;
 import com.quartermaster.dao.VehicleDao;
 import com.quartermaster.dao.VehicleMaintenanceLogDao;
 import com.quartermaster.model.EquipmentCategory;
@@ -14,6 +16,7 @@ import com.quartermaster.model.EquipmentItem;
 import com.quartermaster.model.EquipmentStatus;
 import com.quartermaster.model.IssuanceAdminRow;
 import com.quartermaster.model.Officer;
+import com.quartermaster.model.User;
 import com.quartermaster.model.Vehicle;
 import com.quartermaster.model.VehicleMaintenanceLog;
 import javafx.beans.binding.Bindings;
@@ -27,26 +30,60 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.control.DatePicker;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
-import javafx.scene.control.TabPane;
+import javafx.scene.control.ListView;
+import javafx.scene.control.PasswordField;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.GridPane;
+import javafx.scene.layout.VBox;
+import org.mindrot.jbcrypt.BCrypt;
 
 import java.io.IOException;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 public class AdminController {
+    private static final String MODULE_WEAPONS = "Weapons";
+    private static final String MODULE_EQUIPMENT = "Equipment";
+    private static final String MODULE_UNIFORMS = "Uniforms";
+    private static final String MODULE_VEHICLES = "Vehicles";
+    private static final String MODULE_ADMIN_SETTINGS = "Admin Settings";
+
     @FXML
     private Label welcomeLabel;
 
     @FXML
-    private TabPane adminTabPane;
+    private ListView<String> moduleNavList;
+
+    @FXML
+    private VBox moduleSettingsPane;
+
+    @FXML
+    private VBox moduleInventoryPane;
+
+    @FXML
+    private VBox moduleFleetPane;
+
+    @FXML
+    private Label detailTitleLabel;
+
+    @FXML
+    private Label detailLine1Label;
+
+    @FXML
+    private Label detailLine2Label;
+
+    @FXML
+    private Label detailLine3Label;
+
+    @FXML
+    private Label detailLine4Label;
 
     @FXML
     private TableView<Officer> officersTable;
@@ -64,7 +101,31 @@ public class AdminController {
     private TableColumn<Officer, String> officerBadgeColumn;
 
     @FXML
+    private TableView<User> usersTable;
+
+    @FXML
+    private TableColumn<User, Integer> userIdColumn;
+
+    @FXML
+    private TableColumn<User, String> usernameColumn;
+
+    @FXML
+    private TableColumn<User, String> roleColumn;
+
+    @FXML
+    private TableColumn<User, String> linkedOfficerColumn;
+
+    @FXML
     private TableView<EquipmentItem> equipmentTable;
+
+    @FXML
+    private TableView<EquipmentCategory> categoryTable;
+
+    @FXML
+    private TableColumn<EquipmentCategory, String> categoryPathColumn;
+
+    @FXML
+    private TableColumn<EquipmentCategory, String> categoryTypeColumn;
 
     @FXML
     private TableColumn<EquipmentItem, String> equipmentNameColumn;
@@ -145,10 +206,13 @@ public class AdminController {
     private TableColumn<VehicleMaintenanceLog, String> maintenanceByColumn;
 
     private final OfficerDao officerDao = new OfficerDao();
+    private final UserDao userDao = new UserDao();
+    private final EquipmentCategoryDao equipmentCategoryDao = new EquipmentCategoryDao();
     private final EquipmentDao equipmentDao = new EquipmentDao();
     private final IssuanceDao issuanceDao = new IssuanceDao();
     private final VehicleDao vehicleDao = new VehicleDao();
     private final VehicleMaintenanceLogDao maintenanceLogDao = new VehicleMaintenanceLogDao();
+    private String currentInventoryBranchKey = "WEAPON";
 
     @FXML
     public void initialize() {
@@ -160,10 +224,14 @@ public class AdminController {
         welcomeLabel.setText("Admin: " + SessionManager.getCurrentUser().getUsername());
 
         setupOfficerTable();
+        setupUsersTable();
+        setupCategoryTable();
         setupEquipmentTable();
         setupIssuanceTable();
         setupVehicleTable();
         setupMaintenanceTable();
+        setupNavigation();
+        setupDetailPanel();
 
         issueDatePicker.setValue(LocalDate.now());
         refreshAll();
@@ -180,6 +248,11 @@ public class AdminController {
     }
 
     @FXML
+    public void onOpenAdminSettings() {
+        showModule(MODULE_ADMIN_SETTINGS);
+    }
+
+    @FXML
     public void onAddOfficer() {
         OfficerFormData formData = showOfficerDialog(null);
         if (formData == null) {
@@ -188,6 +261,7 @@ public class AdminController {
 
         officerDao.insert(formData.name(), formData.rank(), formData.badgeNumber());
         refreshOfficers();
+        refreshUsers();
     }
 
     @FXML
@@ -205,6 +279,7 @@ public class AdminController {
 
         officerDao.update(selected.getOfficerId(), formData.name(), formData.rank(), formData.badgeNumber());
         refreshOfficers();
+        refreshUsers();
     }
 
     @FXML
@@ -217,6 +292,86 @@ public class AdminController {
 
         officerDao.delete(selected.getOfficerId());
         refreshOfficers();
+        refreshUsers();
+    }
+
+    @FXML
+    public void onAddLoginPersonnel() {
+        Dialog<UserFormData> dialog = new Dialog<>();
+        dialog.setTitle("Add Login Personnel");
+        UiAlerts.applyTheme(dialog);
+
+        ButtonType saveButtonType = new ButtonType("Save", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(saveButtonType, ButtonType.CANCEL);
+
+        TextField usernameField = new TextField();
+        PasswordField passwordField = new PasswordField();
+        ComboBox<UserRole> roleCombo = new ComboBox<>(FXCollections.observableArrayList(UserRole.values()));
+        ComboBox<Officer> officerCombo = new ComboBox<>(FXCollections.observableArrayList(officerDao.findAll()));
+
+        roleCombo.getSelectionModel().select(UserRole.OFFICER);
+
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(10);
+        grid.add(new Label("Username"), 0, 0);
+        grid.add(usernameField, 1, 0);
+        grid.add(new Label("Password"), 0, 1);
+        grid.add(passwordField, 1, 1);
+        grid.add(new Label("Role"), 0, 2);
+        grid.add(roleCombo, 1, 2);
+        grid.add(new Label("Linked Officer"), 0, 3);
+        grid.add(officerCombo, 1, 3);
+
+        dialog.getDialogPane().setContent(grid);
+        dialog.setResultConverter(buttonType -> {
+            if (buttonType == saveButtonType) {
+                return new UserFormData(
+                        usernameField.getText() == null ? "" : usernameField.getText().trim(),
+                        passwordField.getText() == null ? "" : passwordField.getText().trim(),
+                        roleCombo.getSelectionModel().getSelectedItem(),
+                        officerCombo.getSelectionModel().getSelectedItem()
+                );
+            }
+            return null;
+        });
+
+        Optional<UserFormData> result = dialog.showAndWait();
+        if (result.isEmpty()) {
+            return;
+        }
+
+        UserFormData formData = result.get();
+        if (formData.username().isEmpty() || formData.password().isEmpty() || formData.role() == null) {
+            UiAlerts.error("Login Personnel", "Username, password, and role are required.");
+            return;
+        }
+        if (formData.role() == UserRole.OFFICER && formData.officer() == null) {
+            UiAlerts.error("Login Personnel", "Officer role must be linked to an officer record.");
+            return;
+        }
+
+        Integer officerId = formData.officer() == null ? null : formData.officer().getOfficerId();
+        String passwordHash = BCrypt.hashpw(formData.password(), BCrypt.gensalt());
+        userDao.createUser(formData.username(), passwordHash, formData.role(), officerId);
+        refreshUsers();
+    }
+
+    @FXML
+    public void onDeleteLoginPersonnel() {
+        User selected = usersTable.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            UiAlerts.error("Login Personnel", "Select a user to delete.");
+            return;
+        }
+
+        if ("admin".equalsIgnoreCase(selected.getUsername())) {
+            UiAlerts.error("Login Personnel", "Default admin account cannot be deleted.");
+            return;
+        }
+
+        userDao.deleteUser(selected.getUserId());
+        refreshUsers();
     }
 
     @FXML
@@ -260,15 +415,72 @@ public class AdminController {
     }
 
     @FXML
+    public void onAddSubcategory() {
+        EquipmentCategory selected = categoryTable.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            UiAlerts.error("Categories", "Select a parent category first.");
+            return;
+        }
+
+        Dialog<String> dialog = new Dialog<>();
+        dialog.setTitle("Add Subcategory");
+        dialog.setHeaderText("Parent: " + selected.getCategoryPath());
+        UiAlerts.applyTheme(dialog);
+
+        ButtonType saveButtonType = new ButtonType("Save", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(saveButtonType, ButtonType.CANCEL);
+
+        TextField nameField = new TextField();
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(10);
+        grid.add(new Label("Subcategory Name"), 0, 0);
+        grid.add(nameField, 1, 0);
+        dialog.getDialogPane().setContent(grid);
+
+        dialog.setResultConverter(buttonType -> buttonType == saveButtonType
+                ? (nameField.getText() == null ? "" : nameField.getText().trim())
+                : null);
+
+        Optional<String> result = dialog.showAndWait();
+        if (result.isEmpty()) {
+            return;
+        }
+        if (result.get().isEmpty()) {
+            UiAlerts.error("Categories", "Subcategory name is required.");
+            return;
+        }
+
+        equipmentCategoryDao.createSubcategory(selected.getCategoryId(), result.get());
+        refreshCategories();
+    }
+
+    @FXML
+    public void onDeleteCategory() {
+        EquipmentCategory selected = categoryTable.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            UiAlerts.error("Categories", "Select a category to remove.");
+            return;
+        }
+
+        try {
+            equipmentCategoryDao.deleteCategory(selected.getCategoryId());
+            refreshCategories();
+        } catch (IllegalStateException ex) {
+            UiAlerts.error("Categories", ex.getMessage());
+        }
+    }
+
+    @FXML
     public void onAttachItemToWeapon() {
         EquipmentItem selectedWeapon = equipmentTable.getSelectionModel().getSelectedItem();
-        if (selectedWeapon == null || selectedWeapon.getCategory() != EquipmentCategory.WEAPON) {
+        if (selectedWeapon == null || !selectedWeapon.getCategory().isWeapon()) {
             UiAlerts.error("Weapon Attachments", "Select a weapon first.");
             return;
         }
 
         List<EquipmentItem> attachmentCandidates = equipmentDao.findAll().stream()
-                .filter(i -> i.getCategory() == EquipmentCategory.ATTACHMENT)
+                .filter(i -> i.getCategory().isWeaponAttachment())
                 .collect(Collectors.toList());
 
         if (attachmentCandidates.isEmpty()) {
@@ -280,6 +492,7 @@ public class AdminController {
         dialog.setTitle("Attach Item");
         dialog.setHeaderText("Attach item to weapon: " + selectedWeapon.getName());
         dialog.setContentText("Attachment:");
+        UiAlerts.applyTheme(dialog);
 
         Optional<EquipmentItem> result = dialog.showAndWait();
         if (result.isEmpty()) {
@@ -293,7 +506,7 @@ public class AdminController {
     @FXML
     public void onRemoveAttachmentFromWeapon() {
         EquipmentItem selectedWeapon = equipmentTable.getSelectionModel().getSelectedItem();
-        if (selectedWeapon == null || selectedWeapon.getCategory() != EquipmentCategory.WEAPON) {
+        if (selectedWeapon == null || !selectedWeapon.getCategory().isWeapon()) {
             UiAlerts.error("Weapon Attachments", "Select a weapon first.");
             return;
         }
@@ -308,6 +521,7 @@ public class AdminController {
         dialog.setTitle("Remove Attachment");
         dialog.setHeaderText("Remove attachment from weapon: " + selectedWeapon.getName());
         dialog.setContentText("Attachment:");
+        UiAlerts.applyTheme(dialog);
 
         Optional<EquipmentItem> result = dialog.showAndWait();
         if (result.isEmpty()) {
@@ -413,6 +627,7 @@ public class AdminController {
         Dialog<MaintenanceFormData> dialog = new Dialog<>();
         dialog.setTitle("Add Maintenance Log");
         dialog.setHeaderText("Vehicle: " + selectedVehicle.getUnitNumber());
+        UiAlerts.applyTheme(dialog);
 
         ButtonType saveButtonType = new ButtonType("Save", ButtonBar.ButtonData.OK_DONE);
         dialog.getDialogPane().getButtonTypes().addAll(saveButtonType, ButtonType.CANCEL);
@@ -468,12 +683,75 @@ public class AdminController {
         officerNameColumn.setCellValueFactory(new PropertyValueFactory<>("name"));
         officerRankColumn.setCellValueFactory(new PropertyValueFactory<>("rank"));
         officerBadgeColumn.setCellValueFactory(new PropertyValueFactory<>("badgeNumber"));
+
+        officersTable.getSelectionModel().selectedItemProperty().addListener((obs, oldValue, selected) -> {
+            if (selected == null) {
+                return;
+            }
+            setDetail(
+                    "Officer",
+                    "ID: " + selected.getOfficerId(),
+                    "Name: " + selected.getName(),
+                    "Rank: " + selected.getRank(),
+                    "Badge: " + selected.getBadgeNumber()
+            );
+        });
+    }
+
+    private void setupUsersTable() {
+        userIdColumn.setCellValueFactory(new PropertyValueFactory<>("userId"));
+        usernameColumn.setCellValueFactory(new PropertyValueFactory<>("username"));
+        roleColumn.setCellValueFactory(cellData -> Bindings.createStringBinding(
+                () -> cellData.getValue().getRole().name()
+        ));
+        linkedOfficerColumn.setCellValueFactory(cellData -> Bindings.createStringBinding(
+                () -> cellData.getValue().getOfficerId() == null ? "" : String.valueOf(cellData.getValue().getOfficerId())
+        ));
+
+        usersTable.getSelectionModel().selectedItemProperty().addListener((obs, oldValue, selected) -> {
+            if (selected == null) {
+                return;
+            }
+            setDetail(
+                    "Login Personnel",
+                    "User ID: " + selected.getUserId(),
+                    "Username: " + selected.getUsername(),
+                    "Role: " + selected.getRole().name(),
+                    "Linked Officer ID: " + (selected.getOfficerId() == null ? "None" : selected.getOfficerId())
+            );
+        });
+    }
+
+    private void setupCategoryTable() {
+        categoryPathColumn.setCellValueFactory(new PropertyValueFactory<>("categoryPath"));
+        categoryTypeColumn.setCellValueFactory(cellData -> Bindings.createStringBinding(() -> {
+            if (cellData.getValue().isWeaponAttachment()) {
+                return "Weapon Attachment";
+            }
+            if (cellData.getValue().isWeapon()) {
+                return "Weapons";
+            }
+            return cellData.getValue().isRootCategory() ? "Main" : "Subcategory";
+        }));
+
+        categoryTable.getSelectionModel().selectedItemProperty().addListener((obs, oldValue, selected) -> {
+            if (selected == null) {
+                return;
+            }
+            setDetail(
+                    "Category",
+                    "Path: " + selected.getCategoryPath(),
+                    "Type: " + (selected.isRootCategory() ? "Main Category" : "Subcategory"),
+                    "Branch: " + selected.getBranchKey(),
+                    selected.isSystemCategory() ? "Protected system category" : "User-managed category"
+            );
+        });
     }
 
     private void setupEquipmentTable() {
         equipmentNameColumn.setCellValueFactory(new PropertyValueFactory<>("name"));
         equipmentCategoryColumn.setCellValueFactory(cellData -> Bindings.createStringBinding(
-                () -> cellData.getValue().getCategory().name()
+            () -> cellData.getValue().getCategory().getCategoryPath()
         ));
         equipmentSerialColumn.setCellValueFactory(new PropertyValueFactory<>("serialNumber"));
         equipmentConditionColumn.setCellValueFactory(cellData -> Bindings.createStringBinding(
@@ -486,10 +764,23 @@ public class AdminController {
             @Override
             protected void updateItem(EquipmentItem item, boolean empty) {
                 super.updateItem(item, empty);
-                setText(empty || item == null ? null : item.getName() + " (" + item.getCategory().name() + ")");
+                setText(empty || item == null ? null : item.getName() + " (" + item.getCategory().getCategoryPath() + ")");
             }
         });
         issueItemCombo.setButtonCell(issueItemCombo.getCellFactory().call(null));
+
+        equipmentTable.getSelectionModel().selectedItemProperty().addListener((obs, oldValue, selected) -> {
+            if (selected == null) {
+                return;
+            }
+            setDetail(
+                    "Equipment Item",
+                    "Name: " + selected.getName(),
+                    "Category: " + selected.getCategory().getCategoryPath(),
+                    "Serial: " + (selected.getSerialNumber() == null ? "" : selected.getSerialNumber()),
+                    "Status: " + selected.getStatus().name()
+            );
+        });
     }
 
     private void setupIssuanceTable() {
@@ -510,6 +801,19 @@ public class AdminController {
             }
         });
         issueOfficerCombo.setButtonCell(issueOfficerCombo.getCellFactory().call(null));
+
+        issuanceTable.getSelectionModel().selectedItemProperty().addListener((obs, oldValue, selected) -> {
+            if (selected == null) {
+                return;
+            }
+            setDetail(
+                    "Issuance",
+                    "Officer: " + selected.getOfficerName(),
+                    "Item: " + selected.getItemName(),
+                    "Issued: " + selected.getIssuedDate(),
+                    "Returned: " + (selected.getReturnedDate() == null ? "Active" : selected.getReturnedDate().toString())
+            );
+        });
     }
 
     private void setupVehicleTable() {
@@ -528,6 +832,19 @@ public class AdminController {
             }
         });
         maintenanceVehicleCombo.setButtonCell(maintenanceVehicleCombo.getCellFactory().call(null));
+
+        vehiclesTable.getSelectionModel().selectedItemProperty().addListener((obs, oldValue, selected) -> {
+            if (selected == null) {
+                return;
+            }
+            setDetail(
+                    "Vehicle",
+                    "Unit: " + selected.getUnitNumber(),
+                    "Model: " + selected.getMake() + " " + selected.getModel(),
+                    "Year: " + selected.getYear(),
+                    "Plate: " + (selected.getPlateNumber() == null ? "" : selected.getPlateNumber())
+            );
+        });
     }
 
     private void setupMaintenanceTable() {
@@ -537,10 +854,94 @@ public class AdminController {
         maintenanceMileageColumn.setCellValueFactory(new PropertyValueFactory<>("mileage"));
         maintenanceDescriptionColumn.setCellValueFactory(new PropertyValueFactory<>("description"));
         maintenanceByColumn.setCellValueFactory(new PropertyValueFactory<>("performedBy"));
+
+        maintenanceTable.getSelectionModel().selectedItemProperty().addListener((obs, oldValue, selected) -> {
+            if (selected == null) {
+                return;
+            }
+            setDetail(
+                    "Maintenance Log",
+                    "Date: " + selected.getLogDate(),
+                    "Mileage: " + (selected.getMileage() == null ? "" : selected.getMileage()),
+                    "Performed By: " + (selected.getPerformedBy() == null ? "" : selected.getPerformedBy()),
+                    "Description: " + selected.getDescription()
+            );
+        });
+    }
+
+    private void setupNavigation() {
+        moduleNavList.setItems(FXCollections.observableArrayList(
+                MODULE_WEAPONS,
+                MODULE_EQUIPMENT,
+                MODULE_UNIFORMS,
+                MODULE_VEHICLES
+        ));
+
+        moduleNavList.getSelectionModel().selectedItemProperty().addListener((obs, oldValue, selected) -> {
+            if (selected == null) {
+                return;
+            }
+            showModule(selected);
+        });
+
+        moduleNavList.getSelectionModel().selectFirst();
+    }
+
+    private void setupDetailPanel() {
+        setDetail(
+                "Record Details",
+                "Select a row in any module.",
+                "Details appear here.",
+                "",
+                ""
+        );
+    }
+
+    private void showModule(String moduleName) {
+        hideAllModules();
+        switch (moduleName) {
+            case MODULE_WEAPONS -> showInventoryModule("WEAPON");
+            case MODULE_EQUIPMENT -> showInventoryModule("EQUIPMENT");
+            case MODULE_UNIFORMS -> showInventoryModule("UNIFORM");
+            case MODULE_VEHICLES -> setPaneVisible(moduleFleetPane, true);
+            case MODULE_ADMIN_SETTINGS -> setPaneVisible(moduleSettingsPane, true);
+            default -> showInventoryModule("WEAPON");
+        }
+    }
+
+    private void hideAllModules() {
+        setPaneVisible(moduleSettingsPane, false);
+        setPaneVisible(moduleInventoryPane, false);
+        setPaneVisible(moduleFleetPane, false);
+    }
+
+    private void setPaneVisible(VBox pane, boolean visible) {
+        if (pane == null) {
+            return;
+        }
+        pane.setVisible(visible);
+        pane.setManaged(visible);
+    }
+
+    private void showInventoryModule(String branchKey) {
+        currentInventoryBranchKey = branchKey;
+        setPaneVisible(moduleInventoryPane, true);
+        refreshEquipmentAndIssueOptions();
+        refreshIssuances();
+    }
+
+    private void setDetail(String title, String line1, String line2, String line3, String line4) {
+        detailTitleLabel.setText(title == null ? "" : title);
+        detailLine1Label.setText(line1 == null ? "" : line1);
+        detailLine2Label.setText(line2 == null ? "" : line2);
+        detailLine3Label.setText(line3 == null ? "" : line3);
+        detailLine4Label.setText(line4 == null ? "" : line4);
     }
 
     private void refreshAll() {
         refreshOfficers();
+        refreshUsers();
+        refreshCategories();
         refreshEquipmentAndIssueOptions();
         refreshIssuances();
         refreshVehiclesAndMaintenanceOptions();
@@ -553,15 +954,36 @@ public class AdminController {
         issueOfficerCombo.setItems(FXCollections.observableArrayList(officers));
     }
 
+    private void refreshUsers() {
+        usersTable.setItems(FXCollections.observableArrayList(userDao.findAll()));
+    }
+
+    private void refreshCategories() {
+        categoryTable.setItems(FXCollections.observableArrayList(equipmentCategoryDao.findAll()));
+    }
+
     private void refreshEquipmentAndIssueOptions() {
-        List<EquipmentItem> equipment = equipmentDao.findAll();
+        List<EquipmentItem> equipment = equipmentDao.findAll().stream()
+            .filter(this::isInActiveInventoryBranch)
+            .collect(Collectors.toList());
         equipmentTable.setItems(FXCollections.observableArrayList(equipment));
-        List<EquipmentItem> availableItems = equipmentDao.findAvailable();
+        List<EquipmentItem> availableItems = equipmentDao.findAvailable().stream()
+            .filter(this::isInActiveInventoryBranch)
+            .collect(Collectors.toList());
         issueItemCombo.setItems(FXCollections.observableArrayList(availableItems));
     }
 
     private void refreshIssuances() {
-        issuanceTable.setItems(FXCollections.observableArrayList(issuanceDao.findAll()));
+        Set<Integer> visibleItemIds = equipmentDao.findAll().stream()
+            .filter(this::isInActiveInventoryBranch)
+            .map(EquipmentItem::getItemId)
+            .collect(Collectors.toSet());
+
+        issuanceTable.setItems(FXCollections.observableArrayList(
+            issuanceDao.findAll().stream()
+                .filter(row -> visibleItemIds.contains(row.getItemId()))
+                .collect(Collectors.toList())
+        ));
     }
 
     private void refreshVehiclesAndMaintenanceOptions() {
@@ -582,6 +1004,7 @@ public class AdminController {
     private OfficerFormData showOfficerDialog(Officer existing) {
         Dialog<OfficerFormData> dialog = new Dialog<>();
         dialog.setTitle(existing == null ? "Add Officer" : "Edit Officer");
+        UiAlerts.applyTheme(dialog);
 
         ButtonType saveButtonType = new ButtonType("Save", ButtonBar.ButtonData.OK_DONE);
         dialog.getDialogPane().getButtonTypes().addAll(saveButtonType, ButtonType.CANCEL);
@@ -628,17 +1051,36 @@ public class AdminController {
     private EquipmentFormData showEquipmentDialog(EquipmentItem existing) {
         Dialog<EquipmentFormData> dialog = new Dialog<>();
         dialog.setTitle(existing == null ? "Add Equipment" : "Edit Equipment");
+        UiAlerts.applyTheme(dialog);
 
         ButtonType saveButtonType = new ButtonType("Save", ButtonBar.ButtonData.OK_DONE);
         dialog.getDialogPane().getButtonTypes().addAll(saveButtonType, ButtonType.CANCEL);
 
         TextField nameField = new TextField(existing == null ? "" : existing.getName());
         TextField serialField = new TextField(existing == null ? "" : existing.getSerialNumber());
-        ComboBox<EquipmentCategory> categoryCombo = new ComboBox<>(FXCollections.observableArrayList(EquipmentCategory.values()));
+        List<EquipmentCategory> filteredCategories = equipmentCategoryDao.findAll().stream()
+                .filter(this::isInActiveInventoryBranch)
+                .collect(Collectors.toList());
+        ComboBox<EquipmentCategory> categoryCombo = new ComboBox<>(FXCollections.observableArrayList(filteredCategories));
         ComboBox<EquipmentCondition> conditionCombo = new ComboBox<>(FXCollections.observableArrayList(EquipmentCondition.values()));
         ComboBox<EquipmentStatus> statusCombo = new ComboBox<>(FXCollections.observableArrayList(EquipmentStatus.values()));
 
-        categoryCombo.getSelectionModel().select(existing == null ? EquipmentCategory.UNIFORM : existing.getCategory());
+        if (existing == null) {
+            categoryCombo.getSelectionModel().select(
+                filteredCategories.stream()
+                    .filter(EquipmentCategory::isRootCategory)
+                    .findFirst()
+                    .or(() -> filteredCategories.stream().findFirst())
+                    .orElse(null)
+            );
+        } else {
+            categoryCombo.getSelectionModel().select(
+                filteredCategories.stream()
+                    .filter(category -> category.getCategoryId() == existing.getCategory().getCategoryId())
+                    .findFirst()
+                    .orElse(null)
+            );
+        }
         conditionCombo.getSelectionModel().select(existing == null ? EquipmentCondition.GOOD : existing.getCondition());
         statusCombo.getSelectionModel().select(existing == null ? EquipmentStatus.AVAILABLE : existing.getStatus());
 
@@ -684,9 +1126,20 @@ public class AdminController {
         return formData;
     }
 
+    private boolean isInActiveInventoryBranch(EquipmentItem item) {
+        return item != null
+                && item.getCategory() != null
+                && currentInventoryBranchKey.equals(item.getCategory().getBranchKey());
+    }
+
+    private boolean isInActiveInventoryBranch(EquipmentCategory category) {
+        return category != null && currentInventoryBranchKey.equals(category.getBranchKey());
+    }
+
     private VehicleFormData showVehicleDialog(Vehicle existing) {
         Dialog<VehicleFormData> dialog = new Dialog<>();
         dialog.setTitle(existing == null ? "Add Vehicle" : "Edit Vehicle");
+        UiAlerts.applyTheme(dialog);
 
         ButtonType saveButtonType = new ButtonType("Save", ButtonBar.ButtonData.OK_DONE);
         dialog.getDialogPane().getButtonTypes().addAll(saveButtonType, ButtonType.CANCEL);
@@ -753,6 +1206,9 @@ public class AdminController {
     }
 
     private record OfficerFormData(String name, String rank, String badgeNumber) {
+    }
+
+    private record UserFormData(String username, String password, UserRole role, Officer officer) {
     }
 
     private record EquipmentFormData(String name, EquipmentCategory category, String serialNumber,

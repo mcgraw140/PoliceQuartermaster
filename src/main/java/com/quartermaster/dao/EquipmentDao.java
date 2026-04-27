@@ -14,10 +14,43 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class EquipmentDao {
+    private static final String CATEGORY_CTE = """
+            WITH RECURSIVE category_tree AS (
+                SELECT category_id,
+                       name,
+                       parent_category_id,
+                       system_key,
+                       CAST(name AS CHAR(500)) AS category_path,
+                       system_key AS branch_key
+                FROM equipment_categories
+                WHERE parent_category_id IS NULL
+                UNION ALL
+                SELECT c.category_id,
+                       c.name,
+                       c.parent_category_id,
+                       c.system_key,
+                       CONCAT(ct.category_path, ' / ', c.name) AS category_path,
+                       COALESCE(c.system_key, ct.branch_key) AS branch_key
+                FROM equipment_categories c
+                JOIN category_tree ct ON c.parent_category_id = ct.category_id
+            )
+            """;
+
     public List<EquipmentItem> findAll() {
-        String sql = """
-                SELECT item_id, name, category, serial_number, `condition`, status
-                FROM equipment_items
+        String sql = CATEGORY_CTE + """
+                SELECT e.item_id,
+                       e.name,
+                       e.serial_number,
+                       e.`condition`,
+                       e.status,
+                       ct.category_id,
+                       ct.name AS category_name,
+                       ct.parent_category_id,
+                       ct.system_key,
+                       ct.branch_key,
+                       ct.category_path
+                FROM equipment_items e
+                JOIN category_tree ct ON ct.category_id = e.category_id
                 ORDER BY name
                 """;
         List<EquipmentItem> items = new ArrayList<>();
@@ -35,10 +68,21 @@ public class EquipmentDao {
     }
 
     public List<EquipmentItem> findAvailable() {
-        String sql = """
-                SELECT item_id, name, category, serial_number, `condition`, status
-                FROM equipment_items
-                WHERE status = 'AVAILABLE'
+        String sql = CATEGORY_CTE + """
+            SELECT e.item_id,
+                   e.name,
+                   e.serial_number,
+                   e.`condition`,
+                   e.status,
+                   ct.category_id,
+                   ct.name AS category_name,
+                   ct.parent_category_id,
+                   ct.system_key,
+                   ct.branch_key,
+                   ct.category_path
+            FROM equipment_items e
+            JOIN category_tree ct ON ct.category_id = e.category_id
+            WHERE e.status = 'AVAILABLE'
                 ORDER BY name
                 """;
         List<EquipmentItem> items = new ArrayList<>();
@@ -47,7 +91,10 @@ public class EquipmentDao {
              PreparedStatement preparedStatement = connection.prepareStatement(sql);
              ResultSet rs = preparedStatement.executeQuery()) {
             while (rs.next()) {
-                items.add(mapItem(rs));
+                EquipmentItem item = mapItem(rs);
+                if (!item.getCategory().isWeaponAttachment()) {
+                    items.add(item);
+                }
             }
             return items;
         } catch (SQLException ex) {
@@ -57,12 +104,12 @@ public class EquipmentDao {
 
     public void insert(String name, EquipmentCategory category, String serialNumber,
                        EquipmentCondition condition, EquipmentStatus status) {
-        String sql = "INSERT INTO equipment_items(name, category, serial_number, `condition`, status) VALUES(?, ?, ?, ?, ?)";
+        String sql = "INSERT INTO equipment_items(name, category_id, serial_number, `condition`, status) VALUES(?, ?, ?, ?, ?)";
 
         try (Connection connection = DatabaseManager.getConnection();
              PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
             preparedStatement.setString(1, name);
-            preparedStatement.setString(2, category.name());
+            preparedStatement.setInt(2, category.getCategoryId());
             preparedStatement.setString(3, serialNumber);
             preparedStatement.setString(4, condition.name());
             preparedStatement.setString(5, status.name());
@@ -76,14 +123,14 @@ public class EquipmentDao {
                        EquipmentCondition condition, EquipmentStatus status) {
         String sql = """
                 UPDATE equipment_items
-                SET name = ?, category = ?, serial_number = ?, `condition` = ?, status = ?
+            SET name = ?, category_id = ?, serial_number = ?, `condition` = ?, status = ?
                 WHERE item_id = ?
                 """;
 
         try (Connection connection = DatabaseManager.getConnection();
              PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
             preparedStatement.setString(1, name);
-            preparedStatement.setString(2, category.name());
+            preparedStatement.setInt(2, category.getCategoryId());
             preparedStatement.setString(3, serialNumber);
             preparedStatement.setString(4, condition.name());
             preparedStatement.setString(5, status.name());
@@ -107,10 +154,21 @@ public class EquipmentDao {
     }
 
     public List<EquipmentItem> getAttachmentsForWeapon(int weaponItemId) {
-        String sql = """
-                SELECT e.item_id, e.name, e.category, e.serial_number, e.`condition`, e.status
-                FROM weapon_attachments wa
-                JOIN equipment_items e ON e.item_id = wa.attachment_item_id
+        String sql = CATEGORY_CTE + """
+            SELECT e.item_id,
+                   e.name,
+                   e.serial_number,
+                   e.`condition`,
+                   e.status,
+                   ct.category_id,
+                   ct.name AS category_name,
+                   ct.parent_category_id,
+                   ct.system_key,
+                   ct.branch_key,
+                   ct.category_path
+            FROM weapon_attachments wa
+            JOIN equipment_items e ON e.item_id = wa.attachment_item_id
+            JOIN category_tree ct ON ct.category_id = e.category_id
                 WHERE wa.weapon_item_id = ?
                 ORDER BY e.name
                 """;
@@ -184,7 +242,14 @@ public class EquipmentDao {
         return new EquipmentItem(
                 rs.getInt("item_id"),
                 rs.getString("name"),
-                EquipmentCategory.valueOf(rs.getString("category")),
+            new EquipmentCategory(
+                rs.getInt("category_id"),
+                rs.getString("category_name"),
+                (Integer) rs.getObject("parent_category_id"),
+                rs.getString("system_key"),
+                rs.getString("branch_key"),
+                rs.getString("category_path")
+            ),
                 rs.getString("serial_number"),
                 EquipmentCondition.valueOf(rs.getString("condition")),
                 EquipmentStatus.valueOf(rs.getString("status"))

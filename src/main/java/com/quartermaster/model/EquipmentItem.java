@@ -44,6 +44,6 @@ public class EquipmentItem {
 
     @Override
     public String toString() {
-        return name + " (" + category + ")";
+        return name + " (" + category.getCategoryPath() + ")";
     }
 }

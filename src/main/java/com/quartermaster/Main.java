@@ -33,6 +33,7 @@ public class Main extends Application {
         FXMLLoader loader = new FXMLLoader(Main.class.getResource(fxmlPath));
         Parent root = loader.load();
         Scene scene = new Scene(root, width, height);
+        scene.getStylesheets().add(Main.class.getResource("/com/quartermaster/styles/dark-theme.css").toExternalForm());
         primaryStage.setTitle(title);
         primaryStage.setScene(scene);
     }
