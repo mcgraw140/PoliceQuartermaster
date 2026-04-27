@@ -27,7 +27,7 @@
         <TabPane fx:id="adminTabPane" tabClosingPolicy="UNAVAILABLE">
             <tabs>
                 <Tab text="Officers">
-                    <VBox spacing="8" padding="10">
+                    <VBox spacing="8" style="-fx-padding: 10;">
                         <HBox spacing="8">
                             <Button text="Add" onAction="#onAddOfficer"/>
                             <Button text="Edit" onAction="#onEditOfficer"/>
@@ -45,7 +45,7 @@
                 </Tab>
 
                 <Tab text="Equipment">
-                    <VBox spacing="8" padding="10">
+                    <VBox spacing="8" style="-fx-padding: 10;">
                         <HBox spacing="8">
                             <Button text="Add" onAction="#onAddEquipment"/>
                             <Button text="Edit" onAction="#onEditEquipment"/>
@@ -66,7 +66,7 @@
                 </Tab>
 
                 <Tab text="Issuances">
-                    <VBox spacing="8" padding="10">
+                    <VBox spacing="8" style="-fx-padding: 10;">
                         <HBox spacing="8">
                             <Label text="Officer"/>
                             <ComboBox fx:id="issueOfficerCombo" prefWidth="220"/>
@@ -89,7 +89,7 @@
                 </Tab>
 
                 <Tab text="Vehicles">
-                    <VBox spacing="8" padding="10">
+                    <VBox spacing="8" style="-fx-padding: 10;">
                         <HBox spacing="8">
                             <Button text="Add" onAction="#onAddVehicle"/>
                             <Button text="Edit" onAction="#onEditVehicle"/>
@@ -109,7 +109,7 @@
                 </Tab>
 
                 <Tab text="Maintenance Logs">
-                    <VBox spacing="8" padding="10">
+                    <VBox spacing="8" style="-fx-padding: 10;">
                         <HBox spacing="8">
                             <Label text="Vehicle"/>
                             <ComboBox fx:id="maintenanceVehicleCombo" prefWidth="300" onAction="#onMaintenanceVehicleChanged"/>
