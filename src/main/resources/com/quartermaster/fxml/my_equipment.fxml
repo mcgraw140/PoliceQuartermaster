@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.TableColumn?>
+<?import javafx.scene.control.TableView?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+
+<VBox spacing="10" xmlns="http://javafx.com/javafx/24" xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="com.quartermaster.controller.MyEquipmentController">
+    <padding>
+        <Insets top="12" right="12" bottom="12" left="12"/>
+    </padding>
+
+    <HBox spacing="8">
+        <Label text="My Issued Equipment" style="-fx-font-size: 16px; -fx-font-weight: bold;"/>
+        <Button text="Refresh" onAction="#onRefresh"/>
+        <Button text="Logout" onAction="#onLogout"/>
+    </HBox>
+
+    <TableView fx:id="myEquipmentTable" prefHeight="520">
+        <columns>
+            <TableColumn fx:id="itemNameColumn" text="Item" prefWidth="240"/>
+            <TableColumn fx:id="categoryColumn" text="Category" prefWidth="140"/>
+            <TableColumn fx:id="serialColumn" text="Serial" prefWidth="180"/>
+            <TableColumn fx:id="issuedDateColumn" text="Issued Date" prefWidth="130"/>
+            <TableColumn fx:id="attachedToColumn" text="Attached To Weapon" prefWidth="180"/>
+        </columns>
+    </TableView>
+</VBox>

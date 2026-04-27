@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.ComboBox?>
+<?import javafx.scene.control.DatePicker?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.Tab?>
+<?import javafx.scene.control.TabPane?>
+<?import javafx.scene.control.TableColumn?>
+<?import javafx.scene.control.TableView?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+
+<BorderPane xmlns="http://javafx.com/javafx/24" xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="com.quartermaster.controller.AdminController">
+    <top>
+        <HBox spacing="10" style="-fx-padding: 10;">
+            <Label fx:id="welcomeLabel" text="Admin" style="-fx-font-size: 15px; -fx-font-weight: bold;"/>
+            <Button text="Refresh All" onAction="#onRefreshAll"/>
+            <Button text="Logout" onAction="#onLogout"/>
+        </HBox>
+    </top>
+
+    <center>
+        <TabPane fx:id="adminTabPane" tabClosingPolicy="UNAVAILABLE">
+            <tabs>
+                <Tab text="Officers">
+                    <VBox spacing="8" padding="10">
+                        <HBox spacing="8">
+                            <Button text="Add" onAction="#onAddOfficer"/>
+                            <Button text="Edit" onAction="#onEditOfficer"/>
+                            <Button text="Delete" onAction="#onDeleteOfficer"/>
+                        </HBox>
+                        <TableView fx:id="officersTable">
+                            <columns>
+                                <TableColumn fx:id="officerIdColumn" text="Officer ID" prefWidth="100"/>
+                                <TableColumn fx:id="officerNameColumn" text="Name" prefWidth="280"/>
+                                <TableColumn fx:id="officerRankColumn" text="Rank" prefWidth="180"/>
+                                <TableColumn fx:id="officerBadgeColumn" text="Badge Number" prefWidth="180"/>
+                            </columns>
+                        </TableView>
+                    </VBox>
+                </Tab>
+
+                <Tab text="Equipment">
+                    <VBox spacing="8" padding="10">
+                        <HBox spacing="8">
+                            <Button text="Add" onAction="#onAddEquipment"/>
+                            <Button text="Edit" onAction="#onEditEquipment"/>
+                            <Button text="Delete" onAction="#onDeleteEquipment"/>
+                            <Button text="Attach Item To Weapon" onAction="#onAttachItemToWeapon"/>
+                            <Button text="Remove Attachment" onAction="#onRemoveAttachmentFromWeapon"/>
+                        </HBox>
+                        <TableView fx:id="equipmentTable">
+                            <columns>
+                                <TableColumn fx:id="equipmentNameColumn" text="Name" prefWidth="260"/>
+                                <TableColumn fx:id="equipmentCategoryColumn" text="Category" prefWidth="170"/>
+                                <TableColumn fx:id="equipmentSerialColumn" text="Serial" prefWidth="200"/>
+                                <TableColumn fx:id="equipmentConditionColumn" text="Condition" prefWidth="120"/>
+                                <TableColumn fx:id="equipmentStatusColumn" text="Status" prefWidth="120"/>
+                            </columns>
+                        </TableView>
+                    </VBox>
+                </Tab>
+
+                <Tab text="Issuances">
+                    <VBox spacing="8" padding="10">
+                        <HBox spacing="8">
+                            <Label text="Officer"/>
+                            <ComboBox fx:id="issueOfficerCombo" prefWidth="220"/>
+                            <Label text="Item"/>
+                            <ComboBox fx:id="issueItemCombo" prefWidth="220"/>
+                            <Label text="Date"/>
+                            <DatePicker fx:id="issueDatePicker"/>
+                            <Button text="Issue" onAction="#onIssueSelectedItem"/>
+                            <Button text="Return Selected" onAction="#onReturnSelectedItem"/>
+                        </HBox>
+                        <TableView fx:id="issuanceTable">
+                            <columns>
+                                <TableColumn fx:id="issuanceOfficerColumn" text="Officer" prefWidth="260"/>
+                                <TableColumn fx:id="issuanceItemColumn" text="Item" prefWidth="280"/>
+                                <TableColumn fx:id="issuanceDateColumn" text="Issued Date" prefWidth="140"/>
+                                <TableColumn fx:id="returnDateColumn" text="Returned Date" prefWidth="140"/>
+                            </columns>
+                        </TableView>
+                    </VBox>
+                </Tab>
+
+                <Tab text="Vehicles">
+                    <VBox spacing="8" padding="10">
+                        <HBox spacing="8">
+                            <Button text="Add" onAction="#onAddVehicle"/>
+                            <Button text="Edit" onAction="#onEditVehicle"/>
+                            <Button text="Delete" onAction="#onDeleteVehicle"/>
+                        </HBox>
+                        <TableView fx:id="vehiclesTable">
+                            <columns>
+                                <TableColumn fx:id="vehicleUnitColumn" text="Unit Number" prefWidth="120"/>
+                                <TableColumn fx:id="vehicleMakeColumn" text="Make" prefWidth="130"/>
+                                <TableColumn fx:id="vehicleModelColumn" text="Model" prefWidth="140"/>
+                                <TableColumn fx:id="vehicleYearColumn" text="Year" prefWidth="90"/>
+                                <TableColumn fx:id="vehicleVinColumn" text="VIN" prefWidth="190"/>
+                                <TableColumn fx:id="vehiclePlateColumn" text="Plate" prefWidth="120"/>
+                            </columns>
+                        </TableView>
+                    </VBox>
+                </Tab>
+
+                <Tab text="Maintenance Logs">
+                    <VBox spacing="8" padding="10">
+                        <HBox spacing="8">
+                            <Label text="Vehicle"/>
+                            <ComboBox fx:id="maintenanceVehicleCombo" prefWidth="300" onAction="#onMaintenanceVehicleChanged"/>
+                            <Button text="Add Log" onAction="#onAddMaintenanceLog"/>
+                        </HBox>
+                        <TableView fx:id="maintenanceTable">
+                            <columns>
+                                <TableColumn fx:id="maintenanceDateColumn" text="Date" prefWidth="130"/>
+                                <TableColumn fx:id="maintenanceMileageColumn" text="Mileage" prefWidth="130"/>
+                                <TableColumn fx:id="maintenanceDescriptionColumn" text="Description" prefWidth="380"/>
+                                <TableColumn fx:id="maintenanceByColumn" text="Performed By" prefWidth="200"/>
+                            </columns>
+                        </TableView>
+                    </VBox>
+                </Tab>
+            </tabs>
+        </TabPane>
+    </center>
+</BorderPane>
