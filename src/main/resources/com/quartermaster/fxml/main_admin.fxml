@@ -34,29 +34,14 @@
             <Separator orientation="VERTICAL"/>
 
             <StackPane style="-fx-padding: 10;" HBox.hgrow="ALWAYS">
-                <VBox fx:id="modulePersonnelPane" spacing="8">
-                    <HBox spacing="8">
-                        <Button text="Add" onAction="#onAddOfficer"/>
-                        <Button text="Edit" onAction="#onEditOfficer"/>
-                        <Button text="Delete" onAction="#onDeleteOfficer"/>
-                    </HBox>
-                    <TableView fx:id="officersTable" VBox.vgrow="ALWAYS">
-                        <columns>
-                            <TableColumn fx:id="officerIdColumn" text="Officer ID" prefWidth="100"/>
-                            <TableColumn fx:id="officerNameColumn" text="Name" prefWidth="280"/>
-                            <TableColumn fx:id="officerRankColumn" text="Rank" prefWidth="180"/>
-                            <TableColumn fx:id="officerBadgeColumn" text="Badge Number" prefWidth="180"/>
-                        </columns>
-                    </TableView>
-                </VBox>
-
-                <VBox fx:id="moduleInventoryPane" spacing="8" visible="false" managed="false">
+                <VBox fx:id="moduleInventoryPane" spacing="8">
+                    <Label fx:id="inventoryModuleTitleLabel" text="Weapons" style="-fx-font-size: 16px; -fx-font-weight: bold;"/>
                     <HBox spacing="8">
                         <Button text="Add" onAction="#onAddEquipment"/>
                         <Button text="Edit" onAction="#onEditEquipment"/>
                         <Button text="Delete" onAction="#onDeleteEquipment"/>
-                        <Button text="Attach Item To Weapon" onAction="#onAttachItemToWeapon"/>
-                        <Button text="Remove Attachment" onAction="#onRemoveAttachmentFromWeapon"/>
+                        <Button fx:id="attachItemButton" text="Attach Item To Weapon" onAction="#onAttachItemToWeapon"/>
+                        <Button fx:id="removeAttachmentButton" text="Remove Attachment" onAction="#onRemoveAttachmentFromWeapon"/>
                     </HBox>
                     <TableView fx:id="equipmentTable" VBox.vgrow="ALWAYS">
                         <columns>
@@ -67,9 +52,6 @@
                             <TableColumn fx:id="equipmentStatusColumn" text="Status" prefWidth="120"/>
                         </columns>
                     </TableView>
-                </VBox>
-
-                <VBox fx:id="moduleIssuancePane" spacing="8" visible="false" managed="false">
                     <HBox spacing="8">
                         <Label text="Officer"/>
                         <ComboBox fx:id="issueOfficerCombo" prefWidth="220"/>
@@ -91,6 +73,7 @@
                 </VBox>
 
                 <VBox fx:id="moduleFleetPane" spacing="8" visible="false" managed="false">
+                    <Label text="Vehicles" style="-fx-font-size: 16px; -fx-font-weight: bold;"/>
                     <HBox spacing="8">
                         <Button text="Add" onAction="#onAddVehicle"/>
                         <Button text="Edit" onAction="#onEditVehicle"/>
@@ -106,9 +89,8 @@
                             <TableColumn fx:id="vehiclePlateColumn" text="Plate" prefWidth="120"/>
                         </columns>
                     </TableView>
-                </VBox>
-
-                <VBox fx:id="moduleMaintenancePane" spacing="8" visible="false" managed="false">
+                    <Separator/>
+                    <Label text="Maintenance Logs" style="-fx-font-weight: bold;"/>
                     <HBox spacing="8">
                         <Label text="Vehicle"/>
                         <ComboBox fx:id="maintenanceVehicleCombo" prefWidth="300" onAction="#onMaintenanceVehicleChanged"/>
@@ -127,6 +109,22 @@
                 <VBox fx:id="moduleSettingsPane" spacing="12" visible="false" managed="false">
                     <Label text="Admin Settings" style="-fx-font-size: 16px; -fx-font-weight: bold;"/>
 
+                    <Label text="Personnel" style="-fx-font-weight: bold;"/>
+                    <HBox spacing="8">
+                        <Button text="Add Officer" onAction="#onAddOfficer"/>
+                        <Button text="Edit Officer" onAction="#onEditOfficer"/>
+                        <Button text="Delete Officer" onAction="#onDeleteOfficer"/>
+                    </HBox>
+                    <TableView fx:id="officersTable" prefHeight="220">
+                        <columns>
+                            <TableColumn fx:id="officerIdColumn" text="Officer ID" prefWidth="100"/>
+                            <TableColumn fx:id="officerNameColumn" text="Name" prefWidth="280"/>
+                            <TableColumn fx:id="officerRankColumn" text="Rank" prefWidth="180"/>
+                            <TableColumn fx:id="officerBadgeColumn" text="Badge Number" prefWidth="180"/>
+                        </columns>
+                    </TableView>
+
+                    <Separator/>
                     <Label text="Login Personnel" style="-fx-font-weight: bold;"/>
                     <HBox spacing="8">
                         <Button text="Add Login" onAction="#onAddLoginPersonnel"/>

@@ -24,6 +24,7 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.scene.control.ButtonBar;
+import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.ChoiceDialog;
 import javafx.scene.control.ComboBox;
@@ -69,6 +70,15 @@ public class AdminController {
 
     @FXML
     private VBox moduleFleetPane;
+
+    @FXML
+    private Label inventoryModuleTitleLabel;
+
+    @FXML
+    private Button attachItemButton;
+
+    @FXML
+    private Button removeAttachmentButton;
 
     @FXML
     private Label detailTitleLabel;
@@ -874,7 +884,8 @@ public class AdminController {
                 MODULE_WEAPONS,
                 MODULE_EQUIPMENT,
                 MODULE_UNIFORMS,
-                MODULE_VEHICLES
+            MODULE_VEHICLES,
+            MODULE_ADMIN_SETTINGS
         ));
 
         moduleNavList.getSelectionModel().selectedItemProperty().addListener((obs, oldValue, selected) -> {
@@ -925,9 +936,24 @@ public class AdminController {
 
     private void showInventoryModule(String branchKey) {
         currentInventoryBranchKey = branchKey;
+        inventoryModuleTitleLabel.setText(getInventoryModuleTitle(branchKey));
+        boolean weaponModule = "WEAPON".equals(branchKey);
+        attachItemButton.setVisible(weaponModule);
+        attachItemButton.setManaged(weaponModule);
+        removeAttachmentButton.setVisible(weaponModule);
+        removeAttachmentButton.setManaged(weaponModule);
         setPaneVisible(moduleInventoryPane, true);
         refreshEquipmentAndIssueOptions();
         refreshIssuances();
+    }
+
+    private String getInventoryModuleTitle(String branchKey) {
+        return switch (branchKey) {
+            case "WEAPON" -> "Weapons";
+            case "EQUIPMENT" -> "Equipment";
+            case "UNIFORM" -> "Uniforms";
+            default -> "Inventory";
+        };
     }
 
     private void setDetail(String title, String line1, String line2, String line3, String line4) {
