@@ -8,7 +8,7 @@
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.VBox?>
 
-<VBox spacing="10" xmlns="http://javafx.com/javafx/24" xmlns:fx="http://javafx.com/fxml/1"
+<VBox spacing="10" xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
       fx:controller="com.quartermaster.controller.MyEquipmentController">
     <padding>
         <Insets top="12" right="12" bottom="12" left="12"/>
