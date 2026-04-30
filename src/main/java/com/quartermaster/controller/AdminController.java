@@ -4,17 +4,19 @@ import com.quartermaster.Main;
 import com.quartermaster.auth.SessionManager;
 import com.quartermaster.auth.UserRole;
 import com.quartermaster.dao.EquipmentDao;
-import com.quartermaster.dao.EquipmentCategoryDao;
 import com.quartermaster.dao.IssuanceDao;
+import com.quartermaster.dao.LookupDao;
 import com.quartermaster.dao.OfficerDao;
 import com.quartermaster.dao.UserDao;
 import com.quartermaster.dao.VehicleDao;
 import com.quartermaster.dao.VehicleMaintenanceLogDao;
-import com.quartermaster.model.EquipmentCategory;
+import com.quartermaster.model.EquipmentBranch;
 import com.quartermaster.model.EquipmentCondition;
 import com.quartermaster.model.EquipmentItem;
 import com.quartermaster.model.EquipmentStatus;
 import com.quartermaster.model.IssuanceAdminRow;
+import com.quartermaster.model.LookupCategory;
+import com.quartermaster.model.LookupItem;
 import com.quartermaster.model.Officer;
 import com.quartermaster.model.User;
 import com.quartermaster.model.Vehicle;
@@ -22,57 +24,96 @@ import com.quartermaster.model.VehicleMaintenanceLog;
 import javafx.beans.binding.Bindings;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
+import javafx.collections.transformation.FilteredList;
 import javafx.fxml.FXML;
-import javafx.scene.control.ButtonBar;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.ChoiceDialog;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.DatePicker;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListView;
-import javafx.scene.control.PasswordField;
+import javafx.scene.control.SelectionMode;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.GridPane;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import org.mindrot.jbcrypt.BCrypt;
 
 import java.io.IOException;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 public class AdminController {
-    private static final String MODULE_WEAPONS = "Weapons";
-    private static final String MODULE_EQUIPMENT = "Equipment";
-    private static final String MODULE_UNIFORMS = "Uniforms";
-    private static final String MODULE_VEHICLES = "Vehicles";
-    private static final String MODULE_ADMIN_SETTINGS = "Admin Settings";
+
+    private enum MainTab {
+        EQUIPMENT,
+        ISSUE_RETURN,
+        ADMIN,
+        VEHICLE
+    }
+
+    private enum AdminSubTab {
+        PERSONNEL,
+        LOOKUPS,
+        SETTINGS
+    }
 
     @FXML
     private Label welcomeLabel;
 
     @FXML
-    private ListView<String> moduleNavList;
+    private Button topTabEquipment;
 
     @FXML
-    private VBox moduleSettingsPane;
+    private Button topTabIssueReturn;
+
+    @FXML
+    private Button topTabAdmin;
+
+    @FXML
+    private Button topTabVehicle;
+
+    @FXML
+    private HBox moduleNavBar;
+
+    @FXML
+    private Label moduleNavLabel;
 
     @FXML
     private VBox moduleInventoryPane;
 
     @FXML
+    private VBox moduleIssuePane;
+
+    @FXML
     private VBox moduleFleetPane;
 
     @FXML
+    private VBox moduleAdminPane;
+
+    @FXML
     private Label inventoryModuleTitleLabel;
+
+    @FXML
+    private TextField inventorySearchField;
+
+    @FXML
+    private ComboBox<String> inventoryStatusFilterCombo;
+
+    @FXML
+    private Label inventorySummaryLabel;
 
     @FXML
     private Button attachItemButton;
@@ -81,67 +122,16 @@ public class AdminController {
     private Button removeAttachmentButton;
 
     @FXML
-    private Label detailTitleLabel;
-
-    @FXML
-    private Label detailLine1Label;
-
-    @FXML
-    private Label detailLine2Label;
-
-    @FXML
-    private Label detailLine3Label;
-
-    @FXML
-    private Label detailLine4Label;
-
-    @FXML
-    private TableView<Officer> officersTable;
-
-    @FXML
-    private TableColumn<Officer, Integer> officerIdColumn;
-
-    @FXML
-    private TableColumn<Officer, String> officerNameColumn;
-
-    @FXML
-    private TableColumn<Officer, String> officerRankColumn;
-
-    @FXML
-    private TableColumn<Officer, String> officerBadgeColumn;
-
-    @FXML
-    private TableView<User> usersTable;
-
-    @FXML
-    private TableColumn<User, Integer> userIdColumn;
-
-    @FXML
-    private TableColumn<User, String> usernameColumn;
-
-    @FXML
-    private TableColumn<User, String> roleColumn;
-
-    @FXML
-    private TableColumn<User, String> linkedOfficerColumn;
-
-    @FXML
     private TableView<EquipmentItem> equipmentTable;
-
-    @FXML
-    private TableView<EquipmentCategory> categoryTable;
-
-    @FXML
-    private TableColumn<EquipmentCategory, String> categoryPathColumn;
-
-    @FXML
-    private TableColumn<EquipmentCategory, String> categoryTypeColumn;
 
     @FXML
     private TableColumn<EquipmentItem, String> equipmentNameColumn;
 
     @FXML
     private TableColumn<EquipmentItem, String> equipmentCategoryColumn;
+
+    @FXML
+    private TableColumn<EquipmentItem, String> equipmentLocationColumn;
 
     @FXML
     private TableColumn<EquipmentItem, String> equipmentSerialColumn;
@@ -151,6 +141,39 @@ public class AdminController {
 
     @FXML
     private TableColumn<EquipmentItem, String> equipmentStatusColumn;
+
+    @FXML
+    private ComboBox<Officer> issueOfficerCombo;
+
+    @FXML
+    private TextField issueSearchField;
+
+    @FXML
+    private TableView<EquipmentItem> issueAvailableTable;
+
+    @FXML
+    private TableColumn<EquipmentItem, String> issueAvailableNameColumn;
+
+    @FXML
+    private TableColumn<EquipmentItem, String> issueAvailableCategoryColumn;
+
+    @FXML
+    private TableColumn<EquipmentItem, String> issueAvailableSerialColumn;
+
+    @FXML
+    private TableView<EquipmentItem> issueSelectedTable;
+
+    @FXML
+    private TableColumn<EquipmentItem, String> issueSelectedNameColumn;
+
+    @FXML
+    private TableColumn<EquipmentItem, String> issueSelectedCategoryColumn;
+
+    @FXML
+    private TableColumn<EquipmentItem, String> issueSelectedSerialColumn;
+
+    @FXML
+    private DatePicker issueDatePicker;
 
     @FXML
     private TableView<IssuanceAdminRow> issuanceTable;
@@ -168,19 +191,13 @@ public class AdminController {
     private TableColumn<IssuanceAdminRow, String> returnDateColumn;
 
     @FXML
-    private ComboBox<Officer> issueOfficerCombo;
-
-    @FXML
-    private ComboBox<EquipmentItem> issueItemCombo;
-
-    @FXML
-    private DatePicker issueDatePicker;
-
-    @FXML
     private TableView<Vehicle> vehiclesTable;
 
     @FXML
     private TableColumn<Vehicle, String> vehicleUnitColumn;
+
+    @FXML
+    private TableColumn<Vehicle, String> vehicleTypeColumn;
 
     @FXML
     private TableColumn<Vehicle, String> vehicleMakeColumn;
@@ -215,14 +232,76 @@ public class AdminController {
     @FXML
     private TableColumn<VehicleMaintenanceLog, String> maintenanceByColumn;
 
-    private final OfficerDao officerDao = new OfficerDao();
-    private final UserDao userDao = new UserDao();
-    private final EquipmentCategoryDao equipmentCategoryDao = new EquipmentCategoryDao();
+    @FXML
+    private TableColumn<VehicleMaintenanceLog, String> maintenanceCostColumn;
+
+    @FXML
+    private Label adminSubModuleTitle;
+
+    @FXML
+    private VBox adminPersonnelPane;
+
+    @FXML
+    private VBox adminLookupsPane;
+
+    @FXML
+    private VBox adminSettingsPane;
+
+    @FXML
+    private TableView<Officer> officersTable;
+
+    @FXML
+    private TableColumn<Officer, Integer> officerIdColumn;
+
+    @FXML
+    private TableColumn<Officer, String> officerNameColumn;
+
+    @FXML
+    private TableColumn<Officer, String> officerRankColumn;
+
+    @FXML
+    private TableColumn<Officer, String> officerBadgeColumn;
+
+    @FXML
+    private TableView<User> usersTable;
+
+    @FXML
+    private TableColumn<User, Integer> userIdColumn;
+
+    @FXML
+    private TableColumn<User, String> usernameColumn;
+
+    @FXML
+    private TableColumn<User, String> roleColumn;
+
+    @FXML
+    private TableColumn<User, String> linkedOfficerColumn;
+
+    @FXML
+    private ListView<LookupCategory> lookupCategoryList;
+
+    @FXML
+    private Label lookupEditorTitle;
+
+    @FXML
+    private TextField lookupNewItemField;
+
+    @FXML
+    private ListView<LookupItem> lookupItemList;
+
     private final EquipmentDao equipmentDao = new EquipmentDao();
     private final IssuanceDao issuanceDao = new IssuanceDao();
+    private final OfficerDao officerDao = new OfficerDao();
+    private final UserDao userDao = new UserDao();
     private final VehicleDao vehicleDao = new VehicleDao();
     private final VehicleMaintenanceLogDao maintenanceLogDao = new VehicleMaintenanceLogDao();
-    private String currentInventoryBranchKey = "WEAPON";
+    private final LookupDao lookupDao = new LookupDao();
+
+    private MainTab activeMainTab = MainTab.EQUIPMENT;
+    private EquipmentBranch activeEquipmentBranch = EquipmentBranch.WEAPON;
+    private final ObservableList<EquipmentItem> issueAvailableSource = FXCollections.observableArrayList();
+    private final ObservableList<EquipmentItem> issueSelectedItems = FXCollections.observableArrayList();
+    private final FilteredList<EquipmentItem> issueAvailableFiltered = new FilteredList<>(issueAvailableSource, item -> true);
 
     @FXML
     public void initialize() {
@@ -232,18 +311,65 @@ public class AdminController {
         }
 
         welcomeLabel.setText("Admin: " + SessionManager.getCurrentUser().getUsername());
-
-        setupOfficerTable();
-        setupUsersTable();
-        setupCategoryTable();
-        setupEquipmentTable();
-        setupIssuanceTable();
-        setupVehicleTable();
-        setupMaintenanceTable();
-        setupNavigation();
-        setupDetailPanel();
-
+        setupTables();
+        setupFilters();
+        setupLookupAdmin();
         issueDatePicker.setValue(LocalDate.now());
+
+        refreshAll();
+        onTopTabEquipment();
+    }
+
+    @FXML
+    public void onTopTabEquipment() {
+        activeMainTab = MainTab.EQUIPMENT;
+        setPaneVisible(moduleInventoryPane, true);
+        setPaneVisible(moduleIssuePane, false);
+        setPaneVisible(moduleFleetPane, false);
+        setPaneVisible(moduleAdminPane, false);
+        applyTopTabStyles();
+        showEquipmentSubNav();
+        refreshEquipmentAndIssueOptions();
+    }
+
+    @FXML
+    public void onTopTabIssueReturn() {
+        activeMainTab = MainTab.ISSUE_RETURN;
+        setPaneVisible(moduleInventoryPane, false);
+        setPaneVisible(moduleIssuePane, true);
+        setPaneVisible(moduleFleetPane, false);
+        setPaneVisible(moduleAdminPane, false);
+        applyTopTabStyles();
+        setModuleNavMessage("Assign and return equipment by officer.");
+        refreshIssuances();
+        refreshIssueOptions();
+    }
+
+    @FXML
+    public void onTopTabAdmin() {
+        activeMainTab = MainTab.ADMIN;
+        setPaneVisible(moduleInventoryPane, false);
+        setPaneVisible(moduleIssuePane, false);
+        setPaneVisible(moduleFleetPane, false);
+        setPaneVisible(moduleAdminPane, true);
+        applyTopTabStyles();
+        showAdminSubNav(AdminSubTab.PERSONNEL);
+    }
+
+    @FXML
+    public void onTopTabVehicle() {
+        activeMainTab = MainTab.VEHICLE;
+        setPaneVisible(moduleInventoryPane, false);
+        setPaneVisible(moduleIssuePane, false);
+        setPaneVisible(moduleFleetPane, true);
+        setPaneVisible(moduleAdminPane, false);
+        applyTopTabStyles();
+        setModuleNavMessage("Manage fleet units and maintenance history.");
+        refreshVehiclesAndMaintenanceOptions();
+    }
+
+    @FXML
+    public void onRefreshAll() {
         refreshAll();
     }
 
@@ -253,135 +379,10 @@ public class AdminController {
     }
 
     @FXML
-    public void onRefreshAll() {
-        refreshAll();
-    }
-
-    @FXML
-    public void onOpenAdminSettings() {
-        showModule(MODULE_ADMIN_SETTINGS);
-    }
-
-    @FXML
-    public void onAddOfficer() {
-        OfficerFormData formData = showOfficerDialog(null);
-        if (formData == null) {
-            return;
-        }
-
-        officerDao.insert(formData.name(), formData.rank(), formData.badgeNumber());
-        refreshOfficers();
-        refreshUsers();
-    }
-
-    @FXML
-    public void onEditOfficer() {
-        Officer selected = officersTable.getSelectionModel().getSelectedItem();
-        if (selected == null) {
-            UiAlerts.error("Officers", "Select an officer to edit.");
-            return;
-        }
-
-        OfficerFormData formData = showOfficerDialog(selected);
-        if (formData == null) {
-            return;
-        }
-
-        officerDao.update(selected.getOfficerId(), formData.name(), formData.rank(), formData.badgeNumber());
-        refreshOfficers();
-        refreshUsers();
-    }
-
-    @FXML
-    public void onDeleteOfficer() {
-        Officer selected = officersTable.getSelectionModel().getSelectedItem();
-        if (selected == null) {
-            UiAlerts.error("Officers", "Select an officer to delete.");
-            return;
-        }
-
-        officerDao.delete(selected.getOfficerId());
-        refreshOfficers();
-        refreshUsers();
-    }
-
-    @FXML
-    public void onAddLoginPersonnel() {
-        Dialog<UserFormData> dialog = new Dialog<>();
-        dialog.setTitle("Add Login Personnel");
-        UiAlerts.applyTheme(dialog);
-
-        ButtonType saveButtonType = new ButtonType("Save", ButtonBar.ButtonData.OK_DONE);
-        dialog.getDialogPane().getButtonTypes().addAll(saveButtonType, ButtonType.CANCEL);
-
-        TextField usernameField = new TextField();
-        PasswordField passwordField = new PasswordField();
-        ComboBox<UserRole> roleCombo = new ComboBox<>(FXCollections.observableArrayList(UserRole.values()));
-        ComboBox<Officer> officerCombo = new ComboBox<>(FXCollections.observableArrayList(officerDao.findAll()));
-
-        roleCombo.getSelectionModel().select(UserRole.OFFICER);
-
-        GridPane grid = new GridPane();
-        grid.setHgap(10);
-        grid.setVgap(10);
-        grid.add(new Label("Username"), 0, 0);
-        grid.add(usernameField, 1, 0);
-        grid.add(new Label("Password"), 0, 1);
-        grid.add(passwordField, 1, 1);
-        grid.add(new Label("Role"), 0, 2);
-        grid.add(roleCombo, 1, 2);
-        grid.add(new Label("Linked Officer"), 0, 3);
-        grid.add(officerCombo, 1, 3);
-
-        dialog.getDialogPane().setContent(grid);
-        dialog.setResultConverter(buttonType -> {
-            if (buttonType == saveButtonType) {
-                return new UserFormData(
-                        usernameField.getText() == null ? "" : usernameField.getText().trim(),
-                        passwordField.getText() == null ? "" : passwordField.getText().trim(),
-                        roleCombo.getSelectionModel().getSelectedItem(),
-                        officerCombo.getSelectionModel().getSelectedItem()
-                );
-            }
-            return null;
-        });
-
-        Optional<UserFormData> result = dialog.showAndWait();
-        if (result.isEmpty()) {
-            return;
-        }
-
-        UserFormData formData = result.get();
-        if (formData.username().isEmpty() || formData.password().isEmpty() || formData.role() == null) {
-            UiAlerts.error("Login Personnel", "Username, password, and role are required.");
-            return;
-        }
-        if (formData.role() == UserRole.OFFICER && formData.officer() == null) {
-            UiAlerts.error("Login Personnel", "Officer role must be linked to an officer record.");
-            return;
-        }
-
-        Integer officerId = formData.officer() == null ? null : formData.officer().getOfficerId();
-        String passwordHash = BCrypt.hashpw(formData.password(), BCrypt.gensalt());
-        userDao.createUser(formData.username(), passwordHash, formData.role(), officerId);
-        refreshUsers();
-    }
-
-    @FXML
-    public void onDeleteLoginPersonnel() {
-        User selected = usersTable.getSelectionModel().getSelectedItem();
-        if (selected == null) {
-            UiAlerts.error("Login Personnel", "Select a user to delete.");
-            return;
-        }
-
-        if ("admin".equalsIgnoreCase(selected.getUsername())) {
-            UiAlerts.error("Login Personnel", "Default admin account cannot be deleted.");
-            return;
-        }
-
-        userDao.deleteUser(selected.getUserId());
-        refreshUsers();
+    public void onClearInventoryFilters() {
+        inventorySearchField.setText("");
+        inventoryStatusFilterCombo.getSelectionModel().select("All");
+        refreshEquipmentAndIssueOptions();
     }
 
     @FXML
@@ -391,7 +392,21 @@ public class AdminController {
             return;
         }
 
-        equipmentDao.insert(formData.name(), formData.category(), formData.serialNumber(), formData.condition(), formData.status());
+        int created = 0;
+        List<String> serials = formData.serialNumbers();
+        if (serials.isEmpty()) {
+            equipmentDao.insert(formData.toItem(0, formData.serialNumber()));
+            created = 1;
+        } else {
+            for (String serial : serials) {
+                equipmentDao.insert(formData.toItem(0, serial));
+                created++;
+            }
+        }
+
+        if (created > 1) {
+            UiAlerts.info("Equipment", "Added " + created + " items.");
+        }
         refreshEquipmentAndIssueOptions();
     }
 
@@ -408,7 +423,7 @@ public class AdminController {
             return;
         }
 
-        equipmentDao.update(selected.getItemId(), formData.name(), formData.category(), formData.serialNumber(), formData.condition(), formData.status());
+        equipmentDao.update(formData.toItem(selected.getItemId(), formData.serialNumber()));
         refreshEquipmentAndIssueOptions();
     }
 
@@ -425,83 +440,23 @@ public class AdminController {
     }
 
     @FXML
-    public void onAddSubcategory() {
-        EquipmentCategory selected = categoryTable.getSelectionModel().getSelectedItem();
-        if (selected == null) {
-            UiAlerts.error("Categories", "Select a parent category first.");
-            return;
-        }
-
-        Dialog<String> dialog = new Dialog<>();
-        dialog.setTitle("Add Subcategory");
-        dialog.setHeaderText("Parent: " + selected.getCategoryPath());
-        UiAlerts.applyTheme(dialog);
-
-        ButtonType saveButtonType = new ButtonType("Save", ButtonBar.ButtonData.OK_DONE);
-        dialog.getDialogPane().getButtonTypes().addAll(saveButtonType, ButtonType.CANCEL);
-
-        TextField nameField = new TextField();
-        GridPane grid = new GridPane();
-        grid.setHgap(10);
-        grid.setVgap(10);
-        grid.add(new Label("Subcategory Name"), 0, 0);
-        grid.add(nameField, 1, 0);
-        dialog.getDialogPane().setContent(grid);
-
-        dialog.setResultConverter(buttonType -> buttonType == saveButtonType
-                ? (nameField.getText() == null ? "" : nameField.getText().trim())
-                : null);
-
-        Optional<String> result = dialog.showAndWait();
-        if (result.isEmpty()) {
-            return;
-        }
-        if (result.get().isEmpty()) {
-            UiAlerts.error("Categories", "Subcategory name is required.");
-            return;
-        }
-
-        equipmentCategoryDao.createSubcategory(selected.getCategoryId(), result.get());
-        refreshCategories();
-    }
-
-    @FXML
-    public void onDeleteCategory() {
-        EquipmentCategory selected = categoryTable.getSelectionModel().getSelectedItem();
-        if (selected == null) {
-            UiAlerts.error("Categories", "Select a category to remove.");
-            return;
-        }
-
-        try {
-            equipmentCategoryDao.deleteCategory(selected.getCategoryId());
-            refreshCategories();
-        } catch (IllegalStateException ex) {
-            UiAlerts.error("Categories", ex.getMessage());
-        }
-    }
-
-    @FXML
     public void onAttachItemToWeapon() {
         EquipmentItem selectedWeapon = equipmentTable.getSelectionModel().getSelectedItem();
-        if (selectedWeapon == null || !selectedWeapon.getCategory().isWeapon()) {
+        if (selectedWeapon == null || !selectedWeapon.isWeapon()) {
             UiAlerts.error("Weapon Attachments", "Select a weapon first.");
             return;
         }
 
-        List<EquipmentItem> attachmentCandidates = equipmentDao.findAll().stream()
-                .filter(i -> i.getCategory().isWeaponAttachment())
-                .collect(Collectors.toList());
-
-        if (attachmentCandidates.isEmpty()) {
-            UiAlerts.error("Weapon Attachments", "No attachment items found.");
+        List<EquipmentItem> candidates = equipmentDao.findAvailableAttachments();
+        if (candidates.isEmpty()) {
+            UiAlerts.error("Weapon Attachments", "No available attachment items were found.");
             return;
         }
 
-        ChoiceDialog<EquipmentItem> dialog = new ChoiceDialog<>(attachmentCandidates.get(0), attachmentCandidates);
+        ChoiceDialog<EquipmentItem> dialog = new ChoiceDialog<>(candidates.get(0), candidates);
         dialog.setTitle("Attach Item");
-        dialog.setHeaderText("Attach item to weapon: " + selectedWeapon.getName());
-        dialog.setContentText("Attachment:");
+        dialog.setHeaderText("Attach to weapon: " + selectedWeapon.getName());
+        dialog.setContentText("Attachment");
         UiAlerts.applyTheme(dialog);
 
         Optional<EquipmentItem> result = dialog.showAndWait();
@@ -511,26 +466,27 @@ public class AdminController {
 
         equipmentDao.attachToWeapon(selectedWeapon.getItemId(), result.get().getItemId());
         UiAlerts.info("Weapon Attachments", "Attachment linked to weapon.");
+        refreshEquipmentAndIssueOptions();
     }
 
     @FXML
     public void onRemoveAttachmentFromWeapon() {
         EquipmentItem selectedWeapon = equipmentTable.getSelectionModel().getSelectedItem();
-        if (selectedWeapon == null || !selectedWeapon.getCategory().isWeapon()) {
+        if (selectedWeapon == null || !selectedWeapon.isWeapon()) {
             UiAlerts.error("Weapon Attachments", "Select a weapon first.");
             return;
         }
 
-        List<EquipmentItem> linkedAttachments = equipmentDao.getAttachmentsForWeapon(selectedWeapon.getItemId());
-        if (linkedAttachments.isEmpty()) {
+        List<EquipmentItem> linked = equipmentDao.getAttachmentsForWeapon(selectedWeapon.getItemId());
+        if (linked.isEmpty()) {
             UiAlerts.error("Weapon Attachments", "This weapon has no linked attachments.");
             return;
         }
 
-        ChoiceDialog<EquipmentItem> dialog = new ChoiceDialog<>(linkedAttachments.get(0), linkedAttachments);
+        ChoiceDialog<EquipmentItem> dialog = new ChoiceDialog<>(linked.get(0), linked);
         dialog.setTitle("Remove Attachment");
-        dialog.setHeaderText("Remove attachment from weapon: " + selectedWeapon.getName());
-        dialog.setContentText("Attachment:");
+        dialog.setHeaderText("Remove from weapon: " + selectedWeapon.getName());
+        dialog.setContentText("Attachment");
         UiAlerts.applyTheme(dialog);
 
         Optional<EquipmentItem> result = dialog.showAndWait();
@@ -539,38 +495,77 @@ public class AdminController {
         }
 
         equipmentDao.detachFromWeapon(selectedWeapon.getItemId(), result.get().getItemId());
-        UiAlerts.info("Weapon Attachments", "Attachment removed from weapon.");
+        UiAlerts.info("Weapon Attachments", "Attachment removed.");
+        refreshEquipmentAndIssueOptions();
     }
 
     @FXML
     public void onIssueSelectedItem() {
         Officer officer = issueOfficerCombo.getSelectionModel().getSelectedItem();
-        EquipmentItem item = issueItemCombo.getSelectionModel().getSelectedItem();
         LocalDate issueDate = issueDatePicker.getValue();
 
-        if (officer == null || item == null || issueDate == null) {
-            UiAlerts.error("Issuances", "Select officer, item, and date.");
+        if (officer == null || issueDate == null) {
+            UiAlerts.error("Issue / Return", "Select officer and date.");
+            return;
+        }
+        if (issueSelectedItems.isEmpty()) {
+            UiAlerts.error("Issue / Return", "Select at least one item to issue.");
             return;
         }
 
-        issuanceDao.issueItem(officer.getOfficerId(), item.getItemId(), issueDate);
+        List<EquipmentItem> toIssue = new ArrayList<>(issueSelectedItems);
+        for (EquipmentItem item : toIssue) {
+            issuanceDao.issueItem(officer.getOfficerId(), item.getItemId(), issueDate);
+        }
+
+        refreshIssueOptions();
         refreshIssuances();
         refreshEquipmentAndIssueOptions();
+    }
+
+    @FXML
+    public void onAddIssueSelection() {
+        List<EquipmentItem> selected = new ArrayList<>(issueAvailableTable.getSelectionModel().getSelectedItems());
+        if (selected.isEmpty()) {
+            EquipmentItem single = issueAvailableTable.getSelectionModel().getSelectedItem();
+            if (single != null) {
+                selected = List.of(single);
+            }
+        }
+        for (EquipmentItem item : selected) {
+            moveFromAvailableToSelected(item);
+        }
+    }
+
+    @FXML
+    public void onRemoveIssueSelection() {
+        List<EquipmentItem> selected = new ArrayList<>(issueSelectedTable.getSelectionModel().getSelectedItems());
+        if (selected.isEmpty()) {
+            EquipmentItem single = issueSelectedTable.getSelectionModel().getSelectedItem();
+            if (single != null) {
+                selected = List.of(single);
+            }
+        }
+        for (EquipmentItem item : selected) {
+            moveFromSelectedToAvailable(item);
+        }
     }
 
     @FXML
     public void onReturnSelectedItem() {
         IssuanceAdminRow selected = issuanceTable.getSelectionModel().getSelectedItem();
         if (selected == null) {
-            UiAlerts.error("Issuances", "Select an issuance to return.");
+            UiAlerts.error("Issue / Return", "Select an issuance row to return.");
             return;
         }
+
         if (selected.getReturnedDate() != null) {
-            UiAlerts.error("Issuances", "Selected issuance is already returned.");
+            UiAlerts.error("Issue / Return", "That issuance is already returned.");
             return;
         }
 
         issuanceDao.returnItemAndAttachments(selected.getIssuanceId());
+        refreshIssueOptions();
         refreshIssuances();
         refreshEquipmentAndIssueOptions();
     }
@@ -582,7 +577,8 @@ public class AdminController {
             return;
         }
 
-        vehicleDao.insert(formData.unitNumber(), formData.make(), formData.model(), formData.year(), formData.vin(), formData.plate());
+        vehicleDao.insert(formData.unitNumber(), formData.vehicleTypeId(), formData.make(), formData.model(),
+                formData.year(), formData.vin(), formData.plate());
         refreshVehiclesAndMaintenanceOptions();
     }
 
@@ -599,7 +595,8 @@ public class AdminController {
             return;
         }
 
-        vehicleDao.update(selected.getVehicleId(), formData.unitNumber(), formData.make(), formData.model(), formData.year(), formData.vin(), formData.plate());
+        vehicleDao.update(selected.getVehicleId(), formData.unitNumber(), formData.vehicleTypeId(), formData.make(),
+                formData.model(), formData.year(), formData.vin(), formData.plate());
         refreshVehiclesAndMaintenanceOptions();
     }
 
@@ -617,152 +614,269 @@ public class AdminController {
 
     @FXML
     public void onMaintenanceVehicleChanged() {
-        Vehicle selectedVehicle = maintenanceVehicleCombo.getSelectionModel().getSelectedItem();
-        if (selectedVehicle == null) {
+        Vehicle selected = maintenanceVehicleCombo.getSelectionModel().getSelectedItem();
+        if (selected == null) {
             maintenanceTable.setItems(FXCollections.observableArrayList());
             return;
         }
-        List<VehicleMaintenanceLog> logs = maintenanceLogDao.findByVehicle(selectedVehicle.getVehicleId());
-        maintenanceTable.setItems(FXCollections.observableArrayList(logs));
+        maintenanceTable.setItems(FXCollections.observableArrayList(
+                maintenanceLogDao.findByVehicle(selected.getVehicleId())
+        ));
     }
 
     @FXML
     public void onAddMaintenanceLog() {
-        Vehicle selectedVehicle = maintenanceVehicleCombo.getSelectionModel().getSelectedItem();
-        if (selectedVehicle == null) {
-            UiAlerts.error("Maintenance Logs", "Select a vehicle first.");
+        Vehicle selected = maintenanceVehicleCombo.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            UiAlerts.error("Maintenance", "Select a vehicle first.");
             return;
         }
 
-        Dialog<MaintenanceFormData> dialog = new Dialog<>();
-        dialog.setTitle("Add Maintenance Log");
-        dialog.setHeaderText("Vehicle: " + selectedVehicle.getUnitNumber());
-        UiAlerts.applyTheme(dialog);
-
-        ButtonType saveButtonType = new ButtonType("Save", ButtonBar.ButtonData.OK_DONE);
-        dialog.getDialogPane().getButtonTypes().addAll(saveButtonType, ButtonType.CANCEL);
-
-        DatePicker datePicker = new DatePicker(LocalDate.now());
-        TextField mileageField = new TextField();
-        TextField performedByField = new TextField();
-        TextArea descriptionArea = new TextArea();
-        descriptionArea.setPrefRowCount(4);
-
-        GridPane grid = new GridPane();
-        grid.setHgap(10);
-        grid.setVgap(10);
-        grid.add(new Label("Date"), 0, 0);
-        grid.add(datePicker, 1, 0);
-        grid.add(new Label("Mileage"), 0, 1);
-        grid.add(mileageField, 1, 1);
-        grid.add(new Label("Performed By"), 0, 2);
-        grid.add(performedByField, 1, 2);
-        grid.add(new Label("Description"), 0, 3);
-        grid.add(descriptionArea, 1, 3);
-
-        dialog.getDialogPane().setContent(grid);
-
-        dialog.setResultConverter(buttonType -> {
-            if (buttonType == saveButtonType) {
-                String mileageText = mileageField.getText() == null ? "" : mileageField.getText().trim();
-                Integer mileage = mileageText.isEmpty() ? null : Integer.parseInt(mileageText);
-                return new MaintenanceFormData(datePicker.getValue(), mileage,
-                        descriptionArea.getText() == null ? "" : descriptionArea.getText().trim(),
-                        performedByField.getText() == null ? "" : performedByField.getText().trim());
-            }
-            return null;
-        });
-
-        Optional<MaintenanceFormData> result = dialog.showAndWait();
-        if (result.isEmpty()) {
+        MaintenanceFormData formData = showMaintenanceDialog(selected);
+        if (formData == null) {
             return;
         }
 
-        MaintenanceFormData data = result.get();
-        if (data.logDate() == null || data.description().isEmpty()) {
-            UiAlerts.error("Maintenance Logs", "Date and description are required.");
-            return;
-        }
-
-        maintenanceLogDao.insert(selectedVehicle.getVehicleId(), data.logDate(), data.mileage(), data.description(), data.performedBy());
+        maintenanceLogDao.insert(selected.getVehicleId(), formData.logDate(), formData.mileage(),
+                formData.cost(), formData.description(), formData.performedBy());
         onMaintenanceVehicleChanged();
     }
 
-    private void setupOfficerTable() {
-        officerIdColumn.setCellValueFactory(new PropertyValueFactory<>("officerId"));
-        officerNameColumn.setCellValueFactory(new PropertyValueFactory<>("name"));
-        officerRankColumn.setCellValueFactory(new PropertyValueFactory<>("rank"));
-        officerBadgeColumn.setCellValueFactory(new PropertyValueFactory<>("badgeNumber"));
+    @FXML
+    public void onAddOfficer() {
+        OfficerFormData formData = showOfficerDialog(null);
+        if (formData == null) {
+            return;
+        }
 
-        officersTable.getSelectionModel().selectedItemProperty().addListener((obs, oldValue, selected) -> {
-            if (selected == null) {
-                return;
-            }
-            setDetail(
-                    "Officer",
-                    "ID: " + selected.getOfficerId(),
-                    "Name: " + selected.getName(),
-                    "Rank: " + selected.getRank(),
-                    "Badge: " + selected.getBadgeNumber()
-            );
-        });
+        officerDao.insert(formData.name(), formData.rank(), formData.badgeNumber());
+        refreshOfficers();
     }
 
-    private void setupUsersTable() {
-        userIdColumn.setCellValueFactory(new PropertyValueFactory<>("userId"));
-        usernameColumn.setCellValueFactory(new PropertyValueFactory<>("username"));
-        roleColumn.setCellValueFactory(cellData -> Bindings.createStringBinding(
-                () -> cellData.getValue().getRole().name()
-        ));
-        linkedOfficerColumn.setCellValueFactory(cellData -> Bindings.createStringBinding(
-                () -> cellData.getValue().getOfficerId() == null ? "" : String.valueOf(cellData.getValue().getOfficerId())
-        ));
+    @FXML
+    public void onEditOfficer() {
+        Officer selected = officersTable.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            UiAlerts.error("Officers", "Select an officer to edit.");
+            return;
+        }
 
-        usersTable.getSelectionModel().selectedItemProperty().addListener((obs, oldValue, selected) -> {
-            if (selected == null) {
-                return;
-            }
-            setDetail(
-                    "Login Personnel",
-                    "User ID: " + selected.getUserId(),
-                    "Username: " + selected.getUsername(),
-                    "Role: " + selected.getRole().name(),
-                    "Linked Officer ID: " + (selected.getOfficerId() == null ? "None" : selected.getOfficerId())
-            );
-        });
+        OfficerFormData formData = showOfficerDialog(selected);
+        if (formData == null) {
+            return;
+        }
+
+        officerDao.update(selected.getOfficerId(), formData.name(), formData.rank(), formData.badgeNumber());
+        refreshOfficers();
     }
 
-    private void setupCategoryTable() {
-        categoryPathColumn.setCellValueFactory(new PropertyValueFactory<>("categoryPath"));
-        categoryTypeColumn.setCellValueFactory(cellData -> Bindings.createStringBinding(() -> {
-            if (cellData.getValue().isWeaponAttachment()) {
-                return "Weapon Attachment";
+    @FXML
+    public void onDeleteOfficer() {
+        Officer selected = officersTable.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            UiAlerts.error("Officers", "Select an officer to delete.");
+            return;
+        }
+
+        officerDao.delete(selected.getOfficerId());
+        refreshOfficers();
+    }
+
+    @FXML
+    public void onAddLoginPersonnel() {
+        UserFormData formData = showUserDialog();
+        if (formData == null) {
+            return;
+        }
+
+        String hash = BCrypt.hashpw(formData.password(), BCrypt.gensalt());
+        userDao.createUser(formData.username(), hash, formData.role(),
+                formData.officer() == null ? null : formData.officer().getOfficerId());
+        refreshUsers();
+    }
+
+    @FXML
+    public void onDeleteLoginPersonnel() {
+        User selected = usersTable.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            UiAlerts.error("Users", "Select a login row to delete.");
+            return;
+        }
+
+        if ("admin".equalsIgnoreCase(selected.getUsername())) {
+            UiAlerts.error("Users", "Default admin account cannot be deleted.");
+            return;
+        }
+
+        userDao.deleteUser(selected.getUserId());
+        refreshUsers();
+    }
+
+    @FXML
+    public void onLookupAdd() {
+        LookupCategory category = lookupCategoryList.getSelectionModel().getSelectedItem();
+        String value = lookupNewItemField.getText() == null ? "" : lookupNewItemField.getText().trim();
+        if (category == null) {
+            UiAlerts.error("Lookups", "Select a lookup category first.");
+            return;
+        }
+        if (value.isEmpty()) {
+            UiAlerts.error("Lookups", "Value is required.");
+            return;
+        }
+
+        lookupDao.add(category, value);
+        lookupNewItemField.clear();
+        refreshLookupItems(category);
+    }
+
+    @FXML
+    public void onLookupRename() {
+        LookupCategory category = lookupCategoryList.getSelectionModel().getSelectedItem();
+        LookupItem selected = lookupItemList.getSelectionModel().getSelectedItem();
+        if (category == null || selected == null) {
+            UiAlerts.error("Lookups", "Select both category and item.");
+            return;
+        }
+
+        Dialog<String> dialog = new Dialog<>();
+        dialog.setTitle("Rename Lookup Value");
+        dialog.setHeaderText("Category: " + category.getDisplayName());
+        UiAlerts.applyTheme(dialog);
+
+        ButtonType saveButton = new ButtonType("Save", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(saveButton, ButtonType.CANCEL);
+
+        TextField valueField = new TextField(selected.getName());
+        dialog.getDialogPane().setContent(valueField);
+        dialog.setResultConverter(buttonType -> buttonType == saveButton
+                ? (valueField.getText() == null ? "" : valueField.getText().trim())
+                : null);
+
+        Optional<String> result = dialog.showAndWait();
+        if (result.isEmpty() || result.get().isEmpty()) {
+            return;
+        }
+
+        lookupDao.rename(category, selected.getId(), result.get());
+        refreshLookupItems(category);
+    }
+
+    @FXML
+    public void onLookupDelete() {
+        LookupCategory category = lookupCategoryList.getSelectionModel().getSelectedItem();
+        LookupItem selected = lookupItemList.getSelectionModel().getSelectedItem();
+        if (category == null || selected == null) {
+            UiAlerts.error("Lookups", "Select both category and item.");
+            return;
+        }
+
+        lookupDao.delete(category, selected.getId());
+        refreshLookupItems(category);
+    }
+
+    private void setupTables() {
+        setupEquipmentTable();
+        setupIssueSelectionTables();
+        setupIssuanceTable();
+        setupOfficerTable();
+        setupUsersTable();
+        setupVehicleTable();
+        setupMaintenanceTable();
+
+        issueOfficerCombo.setCellFactory(listView -> new javafx.scene.control.ListCell<>() {
+            @Override
+            protected void updateItem(Officer item, boolean empty) {
+                super.updateItem(item, empty);
+                setText(empty || item == null ? null : item.getName() + " (" + item.getBadgeNumber() + ")");
             }
-            if (cellData.getValue().isWeapon()) {
-                return "Weapons";
+        });
+        issueOfficerCombo.setButtonCell(issueOfficerCombo.getCellFactory().call(null));
+
+        maintenanceVehicleCombo.setCellFactory(listView -> new javafx.scene.control.ListCell<>() {
+            @Override
+            protected void updateItem(Vehicle item, boolean empty) {
+                super.updateItem(item, empty);
+                setText(empty || item == null ? null : item.toString());
             }
-            return cellData.getValue().isRootCategory() ? "Main" : "Subcategory";
+        });
+        maintenanceVehicleCombo.setButtonCell(maintenanceVehicleCombo.getCellFactory().call(null));
+
+        issueAvailableTable.setItems(issueAvailableFiltered);
+        issueSelectedTable.setItems(issueSelectedItems);
+        issueAvailableTable.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
+        issueSelectedTable.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
+
+        issueAvailableTable.setRowFactory(table -> {
+            javafx.scene.control.TableRow<EquipmentItem> row = new javafx.scene.control.TableRow<>();
+            row.setOnMouseClicked(event -> {
+                if (event.getClickCount() == 1 && !row.isEmpty()) {
+                    moveFromAvailableToSelected(row.getItem());
+                }
+            });
+            return row;
+        });
+
+        issueSelectedTable.setRowFactory(table -> {
+            javafx.scene.control.TableRow<EquipmentItem> row = new javafx.scene.control.TableRow<>();
+            row.setOnMouseClicked(event -> {
+                if (event.getClickCount() == 1 && !row.isEmpty()) {
+                    moveFromSelectedToAvailable(row.getItem());
+                }
+            });
+            return row;
+        });
+
+        issueSearchField.textProperty().addListener((obs, oldValue, newValue) -> applyIssueAvailableFilter());
+    }
+
+    private void setupIssueSelectionTables() {
+        issueAvailableNameColumn.setCellValueFactory(new PropertyValueFactory<>("name"));
+        issueAvailableCategoryColumn.setCellValueFactory(new PropertyValueFactory<>("categorySummary"));
+        issueAvailableSerialColumn.setCellValueFactory(cellData -> Bindings.createStringBinding(() -> {
+            String serial = cellData.getValue().getSerialNumber();
+            return serial == null ? "" : serial;
         }));
 
-        categoryTable.getSelectionModel().selectedItemProperty().addListener((obs, oldValue, selected) -> {
+        issueSelectedNameColumn.setCellValueFactory(new PropertyValueFactory<>("name"));
+        issueSelectedCategoryColumn.setCellValueFactory(new PropertyValueFactory<>("categorySummary"));
+        issueSelectedSerialColumn.setCellValueFactory(cellData -> Bindings.createStringBinding(() -> {
+            String serial = cellData.getValue().getSerialNumber();
+            return serial == null ? "" : serial;
+        }));
+    }
+
+    private void setupFilters() {
+        inventoryStatusFilterCombo.setItems(FXCollections.observableArrayList(
+                "All",
+                EquipmentStatus.AVAILABLE.name(),
+                EquipmentStatus.ISSUED.name(),
+                EquipmentStatus.MAINTENANCE.name(),
+                EquipmentStatus.RETIRED.name()
+        ));
+        inventoryStatusFilterCombo.getSelectionModel().select("All");
+        inventorySearchField.textProperty().addListener((obs, o, n) -> refreshEquipmentAndIssueOptions());
+        inventoryStatusFilterCombo.valueProperty().addListener((obs, o, n) -> refreshEquipmentAndIssueOptions());
+    }
+
+    private void setupLookupAdmin() {
+        lookupCategoryList.setItems(FXCollections.observableArrayList(LookupCategory.values()));
+        lookupCategoryList.getSelectionModel().selectedItemProperty().addListener((obs, oldValue, selected) -> {
             if (selected == null) {
                 return;
             }
-            setDetail(
-                    "Category",
-                    "Path: " + selected.getCategoryPath(),
-                    "Type: " + (selected.isRootCategory() ? "Main Category" : "Subcategory"),
-                    "Branch: " + selected.getBranchKey(),
-                    selected.isSystemCategory() ? "Protected system category" : "User-managed category"
-            );
+            refreshLookupItems(selected);
         });
+        lookupCategoryList.getSelectionModel().selectFirst();
     }
 
     private void setupEquipmentTable() {
         equipmentNameColumn.setCellValueFactory(new PropertyValueFactory<>("name"));
-        equipmentCategoryColumn.setCellValueFactory(cellData -> Bindings.createStringBinding(
-            () -> cellData.getValue().getCategory().getCategoryPath()
-        ));
+        equipmentCategoryColumn.setCellValueFactory(new PropertyValueFactory<>("categorySummary"));
+        equipmentLocationColumn.setCellValueFactory(cellData -> Bindings.createStringBinding(() -> {
+            String value = cellData.getValue().getStorageLocationName();
+            return value == null ? "" : value;
+        }));
         equipmentSerialColumn.setCellValueFactory(new PropertyValueFactory<>("serialNumber"));
         equipmentConditionColumn.setCellValueFactory(cellData -> Bindings.createStringBinding(
                 () -> cellData.getValue().getCondition().name()
@@ -770,26 +884,26 @@ public class AdminController {
         equipmentStatusColumn.setCellValueFactory(cellData -> Bindings.createStringBinding(
                 () -> cellData.getValue().getStatus().name()
         ));
-        issueItemCombo.setCellFactory(listView -> new javafx.scene.control.ListCell<>() {
-            @Override
-            protected void updateItem(EquipmentItem item, boolean empty) {
-                super.updateItem(item, empty);
-                setText(empty || item == null ? null : item.getName() + " (" + item.getCategory().getCategoryPath() + ")");
-            }
-        });
-        issueItemCombo.setButtonCell(issueItemCombo.getCellFactory().call(null));
 
-        equipmentTable.getSelectionModel().selectedItemProperty().addListener((obs, oldValue, selected) -> {
-            if (selected == null) {
-                return;
+        equipmentStatusColumn.setCellFactory(column -> new javafx.scene.control.TableCell<>() {
+            @Override
+            protected void updateItem(String status, boolean empty) {
+                super.updateItem(status, empty);
+                getStyleClass().removeAll("status-available", "status-issued", "status-maintenance", "status-retired");
+                if (empty || status == null) {
+                    setText(null);
+                    return;
+                }
+                setText(status);
+                switch (status) {
+                    case "AVAILABLE" -> getStyleClass().add("status-available");
+                    case "ISSUED" -> getStyleClass().add("status-issued");
+                    case "MAINTENANCE" -> getStyleClass().add("status-maintenance");
+                    case "RETIRED" -> getStyleClass().add("status-retired");
+                    default -> {
+                    }
+                }
             }
-            setDetail(
-                    "Equipment Item",
-                    "Name: " + selected.getName(),
-                    "Category: " + selected.getCategory().getCategoryPath(),
-                    "Serial: " + (selected.getSerialNumber() == null ? "" : selected.getSerialNumber()),
-                    "Status: " + selected.getStatus().name()
-            );
         });
     }
 
@@ -802,59 +916,38 @@ public class AdminController {
         returnDateColumn.setCellValueFactory(cellData -> Bindings.createStringBinding(
                 () -> cellData.getValue().getReturnedDate() == null ? "" : cellData.getValue().getReturnedDate().toString()
         ));
+    }
 
-        issueOfficerCombo.setCellFactory(listView -> new javafx.scene.control.ListCell<>() {
-            @Override
-            protected void updateItem(Officer officer, boolean empty) {
-                super.updateItem(officer, empty);
-                setText(empty || officer == null ? null : officer.getName() + " (" + officer.getBadgeNumber() + ")");
-            }
-        });
-        issueOfficerCombo.setButtonCell(issueOfficerCombo.getCellFactory().call(null));
+    private void setupOfficerTable() {
+        officerIdColumn.setCellValueFactory(new PropertyValueFactory<>("officerId"));
+        officerNameColumn.setCellValueFactory(new PropertyValueFactory<>("name"));
+        officerRankColumn.setCellValueFactory(new PropertyValueFactory<>("rank"));
+        officerBadgeColumn.setCellValueFactory(new PropertyValueFactory<>("badgeNumber"));
+    }
 
-        issuanceTable.getSelectionModel().selectedItemProperty().addListener((obs, oldValue, selected) -> {
-            if (selected == null) {
-                return;
-            }
-            setDetail(
-                    "Issuance",
-                    "Officer: " + selected.getOfficerName(),
-                    "Item: " + selected.getItemName(),
-                    "Issued: " + selected.getIssuedDate(),
-                    "Returned: " + (selected.getReturnedDate() == null ? "Active" : selected.getReturnedDate().toString())
-            );
-        });
+    private void setupUsersTable() {
+        userIdColumn.setCellValueFactory(new PropertyValueFactory<>("userId"));
+        usernameColumn.setCellValueFactory(new PropertyValueFactory<>("username"));
+        roleColumn.setCellValueFactory(cellData -> Bindings.createStringBinding(
+                () -> cellData.getValue().getRole().name()
+        ));
+        linkedOfficerColumn.setCellValueFactory(cellData -> Bindings.createStringBinding(() -> {
+            Integer officerId = cellData.getValue().getOfficerId();
+            return officerId == null ? "" : String.valueOf(officerId);
+        }));
     }
 
     private void setupVehicleTable() {
         vehicleUnitColumn.setCellValueFactory(new PropertyValueFactory<>("unitNumber"));
+        vehicleTypeColumn.setCellValueFactory(cellData -> Bindings.createStringBinding(() -> {
+            String value = cellData.getValue().getVehicleTypeName();
+            return value == null ? "" : value;
+        }));
         vehicleMakeColumn.setCellValueFactory(new PropertyValueFactory<>("make"));
         vehicleModelColumn.setCellValueFactory(new PropertyValueFactory<>("model"));
         vehicleYearColumn.setCellValueFactory(new PropertyValueFactory<>("year"));
         vehicleVinColumn.setCellValueFactory(new PropertyValueFactory<>("vin"));
         vehiclePlateColumn.setCellValueFactory(new PropertyValueFactory<>("plateNumber"));
-
-        maintenanceVehicleCombo.setCellFactory(listView -> new javafx.scene.control.ListCell<>() {
-            @Override
-            protected void updateItem(Vehicle vehicle, boolean empty) {
-                super.updateItem(vehicle, empty);
-                setText(empty || vehicle == null ? null : vehicle.getUnitNumber() + " - " + vehicle.getMake() + " " + vehicle.getModel());
-            }
-        });
-        maintenanceVehicleCombo.setButtonCell(maintenanceVehicleCombo.getCellFactory().call(null));
-
-        vehiclesTable.getSelectionModel().selectedItemProperty().addListener((obs, oldValue, selected) -> {
-            if (selected == null) {
-                return;
-            }
-            setDetail(
-                    "Vehicle",
-                    "Unit: " + selected.getUnitNumber(),
-                    "Model: " + selected.getMake() + " " + selected.getModel(),
-                    "Year: " + selected.getYear(),
-                    "Plate: " + (selected.getPlateNumber() == null ? "" : selected.getPlateNumber())
-            );
-        });
     }
 
     private void setupMaintenanceTable() {
@@ -864,111 +957,17 @@ public class AdminController {
         maintenanceMileageColumn.setCellValueFactory(new PropertyValueFactory<>("mileage"));
         maintenanceDescriptionColumn.setCellValueFactory(new PropertyValueFactory<>("description"));
         maintenanceByColumn.setCellValueFactory(new PropertyValueFactory<>("performedBy"));
-
-        maintenanceTable.getSelectionModel().selectedItemProperty().addListener((obs, oldValue, selected) -> {
-            if (selected == null) {
-                return;
-            }
-            setDetail(
-                    "Maintenance Log",
-                    "Date: " + selected.getLogDate(),
-                    "Mileage: " + (selected.getMileage() == null ? "" : selected.getMileage()),
-                    "Performed By: " + (selected.getPerformedBy() == null ? "" : selected.getPerformedBy()),
-                    "Description: " + selected.getDescription()
-            );
-        });
-    }
-
-    private void setupNavigation() {
-        moduleNavList.setItems(FXCollections.observableArrayList(
-                MODULE_WEAPONS,
-                MODULE_EQUIPMENT,
-                MODULE_UNIFORMS,
-            MODULE_VEHICLES,
-            MODULE_ADMIN_SETTINGS
-        ));
-
-        moduleNavList.getSelectionModel().selectedItemProperty().addListener((obs, oldValue, selected) -> {
-            if (selected == null) {
-                return;
-            }
-            showModule(selected);
-        });
-
-        moduleNavList.getSelectionModel().selectFirst();
-    }
-
-    private void setupDetailPanel() {
-        setDetail(
-                "Record Details",
-                "Select a row in any module.",
-                "Details appear here.",
-                "",
-                ""
-        );
-    }
-
-    private void showModule(String moduleName) {
-        hideAllModules();
-        switch (moduleName) {
-            case MODULE_WEAPONS -> showInventoryModule("WEAPON");
-            case MODULE_EQUIPMENT -> showInventoryModule("EQUIPMENT");
-            case MODULE_UNIFORMS -> showInventoryModule("UNIFORM");
-            case MODULE_VEHICLES -> setPaneVisible(moduleFleetPane, true);
-            case MODULE_ADMIN_SETTINGS -> setPaneVisible(moduleSettingsPane, true);
-            default -> showInventoryModule("WEAPON");
-        }
-    }
-
-    private void hideAllModules() {
-        setPaneVisible(moduleSettingsPane, false);
-        setPaneVisible(moduleInventoryPane, false);
-        setPaneVisible(moduleFleetPane, false);
-    }
-
-    private void setPaneVisible(VBox pane, boolean visible) {
-        if (pane == null) {
-            return;
-        }
-        pane.setVisible(visible);
-        pane.setManaged(visible);
-    }
-
-    private void showInventoryModule(String branchKey) {
-        currentInventoryBranchKey = branchKey;
-        inventoryModuleTitleLabel.setText(getInventoryModuleTitle(branchKey));
-        boolean weaponModule = "WEAPON".equals(branchKey);
-        attachItemButton.setVisible(weaponModule);
-        attachItemButton.setManaged(weaponModule);
-        removeAttachmentButton.setVisible(weaponModule);
-        removeAttachmentButton.setManaged(weaponModule);
-        setPaneVisible(moduleInventoryPane, true);
-        refreshEquipmentAndIssueOptions();
-        refreshIssuances();
-    }
-
-    private String getInventoryModuleTitle(String branchKey) {
-        return switch (branchKey) {
-            case "WEAPON" -> "Weapons";
-            case "EQUIPMENT" -> "Equipment";
-            case "UNIFORM" -> "Uniforms";
-            default -> "Inventory";
-        };
-    }
-
-    private void setDetail(String title, String line1, String line2, String line3, String line4) {
-        detailTitleLabel.setText(title == null ? "" : title);
-        detailLine1Label.setText(line1 == null ? "" : line1);
-        detailLine2Label.setText(line2 == null ? "" : line2);
-        detailLine3Label.setText(line3 == null ? "" : line3);
-        detailLine4Label.setText(line4 == null ? "" : line4);
+        maintenanceCostColumn.setCellValueFactory(cellData -> Bindings.createStringBinding(() -> {
+            Double value = cellData.getValue().getCost();
+            return value == null ? "" : String.format("$%.2f", value);
+        }));
     }
 
     private void refreshAll() {
         refreshOfficers();
         refreshUsers();
-        refreshCategories();
         refreshEquipmentAndIssueOptions();
+        refreshIssueOptions();
         refreshIssuances();
         refreshVehiclesAndMaintenanceOptions();
     }
@@ -984,32 +983,87 @@ public class AdminController {
         usersTable.setItems(FXCollections.observableArrayList(userDao.findAll()));
     }
 
-    private void refreshCategories() {
-        categoryTable.setItems(FXCollections.observableArrayList(equipmentCategoryDao.findAll()));
+    private void refreshEquipmentAndIssueOptions() {
+        List<EquipmentItem> byBranch = equipmentDao.findByBranch(activeEquipmentBranch);
+        List<EquipmentItem> filtered = byBranch.stream()
+                .filter(this::matchesInventoryFilter)
+                .collect(Collectors.toList());
+
+        equipmentTable.setItems(FXCollections.observableArrayList(filtered));
+        inventorySummaryLabel.setText("Showing " + filtered.size() + " of " + byBranch.size() + " items");
+
+        boolean weaponView = activeEquipmentBranch == EquipmentBranch.WEAPON;
+        attachItemButton.setVisible(weaponView);
+        attachItemButton.setManaged(weaponView);
+        removeAttachmentButton.setVisible(weaponView);
+        removeAttachmentButton.setManaged(weaponView);
+
+        refreshIssueOptions();
     }
 
-    private void refreshEquipmentAndIssueOptions() {
-        List<EquipmentItem> equipment = equipmentDao.findAll().stream()
-            .filter(this::isInActiveInventoryBranch)
-            .collect(Collectors.toList());
-        equipmentTable.setItems(FXCollections.observableArrayList(equipment));
-        List<EquipmentItem> availableItems = equipmentDao.findAvailable().stream()
-            .filter(this::isInActiveInventoryBranch)
-            .collect(Collectors.toList());
-        issueItemCombo.setItems(FXCollections.observableArrayList(availableItems));
+    private void refreshIssueOptions() {
+        List<EquipmentItem> available = equipmentDao.findAll().stream()
+                .filter(item -> item.getStatus() == EquipmentStatus.AVAILABLE)
+                .filter(item -> !item.isAttachment())
+                .sorted(Comparator.comparing(EquipmentItem::getName, String.CASE_INSENSITIVE_ORDER))
+                .collect(Collectors.toList());
+
+        List<Integer> selectedIds = issueSelectedItems.stream()
+                .map(EquipmentItem::getItemId)
+                .collect(Collectors.toList());
+
+        List<EquipmentItem> stillSelected = available.stream()
+                .filter(item -> selectedIds.contains(item.getItemId()))
+                .collect(Collectors.toList());
+        issueSelectedItems.setAll(stillSelected);
+
+        List<EquipmentItem> source = available.stream()
+                .filter(item -> issueSelectedItems.stream().noneMatch(sel -> sel.getItemId() == item.getItemId()))
+                .collect(Collectors.toList());
+        issueAvailableSource.setAll(source);
+        applyIssueAvailableFilter();
+    }
+
+    private void applyIssueAvailableFilter() {
+        String query = issueSearchField.getText() == null ? "" : issueSearchField.getText().trim().toLowerCase();
+        issueAvailableFiltered.setPredicate(item -> {
+            if (query.isEmpty()) {
+                return true;
+            }
+            String serial = item.getSerialNumber() == null ? "" : item.getSerialNumber().toLowerCase();
+            return item.getName().toLowerCase().contains(query)
+                    || item.getCategorySummary().toLowerCase().contains(query)
+                    || serial.contains(query);
+        });
+    }
+
+    private void moveFromAvailableToSelected(EquipmentItem item) {
+        if (item == null) {
+            return;
+        }
+        issueAvailableSource.removeIf(existing -> existing.getItemId() == item.getItemId());
+        boolean exists = issueSelectedItems.stream().anyMatch(existing -> existing.getItemId() == item.getItemId());
+        if (!exists) {
+            issueSelectedItems.add(item);
+            issueSelectedItems.sort(Comparator.comparing(EquipmentItem::getName, String.CASE_INSENSITIVE_ORDER));
+        }
+    }
+
+    private void moveFromSelectedToAvailable(EquipmentItem item) {
+        if (item == null) {
+            return;
+        }
+        issueSelectedItems.removeIf(existing -> existing.getItemId() == item.getItemId());
+        boolean exists = issueAvailableSource.stream().anyMatch(existing -> existing.getItemId() == item.getItemId());
+        if (!exists) {
+            issueAvailableSource.add(item);
+            issueAvailableSource.sort(Comparator.comparing(EquipmentItem::getName, String.CASE_INSENSITIVE_ORDER));
+            applyIssueAvailableFilter();
+        }
     }
 
     private void refreshIssuances() {
-        Set<Integer> visibleItemIds = equipmentDao.findAll().stream()
-            .filter(this::isInActiveInventoryBranch)
-            .map(EquipmentItem::getItemId)
-            .collect(Collectors.toSet());
-
-        issuanceTable.setItems(FXCollections.observableArrayList(
-            issuanceDao.findAll().stream()
-                .filter(row -> visibleItemIds.contains(row.getItemId()))
-                .collect(Collectors.toList())
-        ));
+        issuanceTable.setItems(FXCollections.observableArrayList(issuanceDao.findAll()));
     }
 
     private void refreshVehiclesAndMaintenanceOptions() {
@@ -1017,14 +1071,162 @@ public class AdminController {
         ObservableList<Vehicle> list = FXCollections.observableArrayList(vehicles);
         vehiclesTable.setItems(list);
 
-        Vehicle previousSelection = maintenanceVehicleCombo.getSelectionModel().getSelectedItem();
+        Vehicle previous = maintenanceVehicleCombo.getSelectionModel().getSelectedItem();
         maintenanceVehicleCombo.setItems(list);
-        if (previousSelection != null) {
+        if (previous != null) {
             maintenanceVehicleCombo.getSelectionModel().select(
-                    list.stream().filter(v -> v.getVehicleId() == previousSelection.getVehicleId()).findFirst().orElse(null)
+                    vehicles.stream()
+                            .filter(v -> v.getVehicleId() == previous.getVehicleId())
+                            .findFirst()
+                            .orElse(null)
             );
         }
         onMaintenanceVehicleChanged();
+    }
+
+    private boolean matchesInventoryFilter(EquipmentItem item) {
+        String selectedStatus = inventoryStatusFilterCombo.getSelectionModel().getSelectedItem();
+        if (selectedStatus != null && !"All".equals(selectedStatus) && !selectedStatus.equals(item.getStatus().name())) {
+            return false;
+        }
+
+        String query = inventorySearchField.getText() == null ? "" : inventorySearchField.getText().trim().toLowerCase();
+        if (query.isEmpty()) {
+            return true;
+        }
+
+        String serial = item.getSerialNumber() == null ? "" : item.getSerialNumber().toLowerCase();
+        String location = item.getStorageLocationName() == null ? "" : item.getStorageLocationName().toLowerCase();
+        return item.getName().toLowerCase().contains(query)
+                || item.getCategorySummary().toLowerCase().contains(query)
+                || serial.contains(query)
+                || location.contains(query);
+    }
+
+    private void showEquipmentSubNav() {
+        moduleNavLabel.setText("Equipment Categories");
+
+        Button weaponsButton = createSubNavButton("Weapons", () -> setEquipmentBranch(EquipmentBranch.WEAPON));
+        Button dutyButton = createSubNavButton("Duty", () -> setEquipmentBranch(EquipmentBranch.EQUIPMENT));
+        Button uniformsButton = createSubNavButton("Uniforms", () -> setEquipmentBranch(EquipmentBranch.UNIFORM));
+        Button addButton = createSubNavButton("Add Equipment", this::onAddEquipment);
+
+        moduleNavBar.getChildren().setAll(moduleNavLabel, weaponsButton, dutyButton, uniformsButton, addButton);
+        setEquipmentBranch(activeEquipmentBranch);
+    }
+
+    private void setEquipmentBranch(EquipmentBranch branch) {
+        this.activeEquipmentBranch = branch;
+        inventoryModuleTitleLabel.setText(branch.getDisplayName());
+
+        List<Button> buttons = getSubNavButtons();
+        if (buttons.size() >= 3) {
+            clearActive(buttons);
+            switch (branch) {
+                case WEAPON -> buttons.get(0).getStyleClass().add("active");
+                case EQUIPMENT -> buttons.get(1).getStyleClass().add("active");
+                case UNIFORM -> buttons.get(2).getStyleClass().add("active");
+            }
+        }
+
+        refreshEquipmentAndIssueOptions();
+    }
+
+    private void showAdminSubNav(AdminSubTab subTab) {
+        moduleNavLabel.setText("Admin");
+
+        Button personnelButton = createSubNavButton("Officers", () -> switchAdminSubTab(AdminSubTab.PERSONNEL));
+        Button lookupsButton = createSubNavButton("Lookups", () -> switchAdminSubTab(AdminSubTab.LOOKUPS));
+        Button settingsButton = createSubNavButton("Settings", () -> switchAdminSubTab(AdminSubTab.SETTINGS));
+
+        moduleNavBar.getChildren().setAll(moduleNavLabel, personnelButton, lookupsButton, settingsButton);
+        switchAdminSubTab(subTab);
+    }
+
+    private void switchAdminSubTab(AdminSubTab subTab) {
+        List<Button> buttons = getSubNavButtons();
+        clearActive(buttons);
+        switch (subTab) {
+            case PERSONNEL -> {
+                adminSubModuleTitle.setText("Personnel");
+                setPaneVisible(adminPersonnelPane, true);
+                setPaneVisible(adminLookupsPane, false);
+                setPaneVisible(adminSettingsPane, false);
+                if (buttons.size() > 0) {
+                    buttons.get(0).getStyleClass().add("active");
+                }
+            }
+            case LOOKUPS -> {
+                adminSubModuleTitle.setText("Lookups");
+                setPaneVisible(adminPersonnelPane, false);
+                setPaneVisible(adminLookupsPane, true);
+                setPaneVisible(adminSettingsPane, false);
+                if (buttons.size() > 1) {
+                    buttons.get(1).getStyleClass().add("active");
+                }
+            }
+            case SETTINGS -> {
+                adminSubModuleTitle.setText("Settings");
+                setPaneVisible(adminPersonnelPane, false);
+                setPaneVisible(adminLookupsPane, false);
+                setPaneVisible(adminSettingsPane, true);
+                if (buttons.size() > 2) {
+                    buttons.get(2).getStyleClass().add("active");
+                }
+            }
+        }
+    }
+
+    private void setModuleNavMessage(String text) {
+        moduleNavLabel.setText(text);
+        moduleNavBar.getChildren().setAll(moduleNavLabel);
+    }
+
+    private Button createSubNavButton(String text, Runnable action) {
+        Button button = new Button(text);
+        button.getStyleClass().add("nav-tab");
+        button.setOnAction(event -> action.run());
+        return button;
+    }
+
+    private List<Button> getSubNavButtons() {
+        List<Button> buttons = new ArrayList<>();
+        for (javafx.scene.Node node : moduleNavBar.getChildren()) {
+            if (node instanceof Button button) {
+                buttons.add(button);
+            }
+        }
+        return buttons;
+    }
+
+    private void clearActive(List<Button> buttons) {
+        for (Button button : buttons) {
+            button.getStyleClass().remove("active");
+        }
+    }
+
+    private void applyTopTabStyles() {
+        List<Button> buttons = List.of(topTabEquipment, topTabIssueReturn, topTabAdmin, topTabVehicle);
+        for (Button button : buttons) {
+            button.getStyleClass().remove("active");
+        }
+
+        switch (activeMainTab) {
+            case EQUIPMENT -> topTabEquipment.getStyleClass().add("active");
+            case ISSUE_RETURN -> topTabIssueReturn.getStyleClass().add("active");
+            case ADMIN -> topTabAdmin.getStyleClass().add("active");
+            case VEHICLE -> topTabVehicle.getStyleClass().add("active");
+        }
+    }
+
+    private void refreshLookupItems(LookupCategory category) {
+        lookupEditorTitle.setText(category.getDisplayName());
+        lookupItemList.setItems(FXCollections.observableArrayList(lookupDao.findAll(category)));
+    }
+
+    private void setPaneVisible(VBox pane, boolean visible) {
+        pane.setVisible(visible);
+        pane.setManaged(visible);
     }
 
     private OfficerFormData showOfficerDialog(Officer existing) {
@@ -1032,8 +1234,8 @@ public class AdminController {
         dialog.setTitle(existing == null ? "Add Officer" : "Edit Officer");
         UiAlerts.applyTheme(dialog);
 
-        ButtonType saveButtonType = new ButtonType("Save", ButtonBar.ButtonData.OK_DONE);
-        dialog.getDialogPane().getButtonTypes().addAll(saveButtonType, ButtonType.CANCEL);
+        ButtonType saveButton = new ButtonType("Save", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(saveButton, ButtonType.CANCEL);
 
         TextField nameField = new TextField(existing == null ? "" : existing.getName());
         TextField rankField = new TextField(existing == null ? "" : existing.getRank());
@@ -1050,16 +1252,13 @@ public class AdminController {
         grid.add(badgeField, 1, 2);
 
         dialog.getDialogPane().setContent(grid);
-        dialog.setResultConverter(buttonType -> {
-            if (buttonType == saveButtonType) {
-                return new OfficerFormData(
-                        nameField.getText() == null ? "" : nameField.getText().trim(),
-                        rankField.getText() == null ? "" : rankField.getText().trim(),
-                        badgeField.getText() == null ? "" : badgeField.getText().trim()
-                );
-            }
-            return null;
-        });
+        dialog.setResultConverter(buttonType -> buttonType == saveButton
+                ? new OfficerFormData(
+                        text(nameField),
+                        text(rankField),
+                        text(badgeField)
+                )
+                : null);
 
         Optional<OfficerFormData> result = dialog.showAndWait();
         if (result.isEmpty()) {
@@ -1074,68 +1273,215 @@ public class AdminController {
         return formData;
     }
 
+    private UserFormData showUserDialog() {
+        Dialog<UserFormData> dialog = new Dialog<>();
+        dialog.setTitle("Add Login");
+        UiAlerts.applyTheme(dialog);
+
+        ButtonType saveButton = new ButtonType("Save", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(saveButton, ButtonType.CANCEL);
+
+        TextField usernameField = new TextField();
+        TextField passwordField = new TextField();
+        ComboBox<UserRole> roleCombo = new ComboBox<>(FXCollections.observableArrayList(UserRole.values()));
+        roleCombo.getSelectionModel().select(UserRole.OFFICER);
+
+        List<Officer> officers = officerDao.findAll();
+        ComboBox<Officer> officerCombo = new ComboBox<>(FXCollections.observableArrayList(officers));
+
+        roleCombo.valueProperty().addListener((obs, oldRole, newRole) -> {
+            boolean officerRole = newRole == UserRole.OFFICER;
+            officerCombo.setDisable(!officerRole);
+            if (!officerRole) {
+                officerCombo.getSelectionModel().clearSelection();
+            }
+        });
+
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(10);
+        grid.add(new Label("Username"), 0, 0);
+        grid.add(usernameField, 1, 0);
+        grid.add(new Label("Password"), 0, 1);
+        grid.add(passwordField, 1, 1);
+        grid.add(new Label("Role"), 0, 2);
+        grid.add(roleCombo, 1, 2);
+        grid.add(new Label("Officer"), 0, 3);
+        grid.add(officerCombo, 1, 3);
+
+        dialog.getDialogPane().setContent(grid);
+        dialog.setResultConverter(buttonType -> buttonType == saveButton
+                ? new UserFormData(text(usernameField), text(passwordField), roleCombo.getValue(), officerCombo.getValue())
+                : null);
+
+        Optional<UserFormData> result = dialog.showAndWait();
+        if (result.isEmpty()) {
+            return null;
+        }
+
+        UserFormData formData = result.get();
+        if (formData.username().isEmpty() || formData.password().isEmpty() || formData.role() == null) {
+            UiAlerts.error("Users", "Username, password, and role are required.");
+            return null;
+        }
+        if (formData.role() == UserRole.OFFICER && formData.officer() == null) {
+            UiAlerts.error("Users", "Officer role requires a linked officer.");
+            return null;
+        }
+        return formData;
+    }
+
     private EquipmentFormData showEquipmentDialog(EquipmentItem existing) {
         Dialog<EquipmentFormData> dialog = new Dialog<>();
         dialog.setTitle(existing == null ? "Add Equipment" : "Edit Equipment");
         UiAlerts.applyTheme(dialog);
 
-        ButtonType saveButtonType = new ButtonType("Save", ButtonBar.ButtonData.OK_DONE);
-        dialog.getDialogPane().getButtonTypes().addAll(saveButtonType, ButtonType.CANCEL);
+        ButtonType saveButton = new ButtonType("Save", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(saveButton, ButtonType.CANCEL);
 
         TextField nameField = new TextField(existing == null ? "" : existing.getName());
+        TextField makeField = new TextField();
+        TextField modelField = new TextField();
         TextField serialField = new TextField(existing == null ? "" : existing.getSerialNumber());
-        List<EquipmentCategory> filteredCategories = equipmentCategoryDao.findAll().stream()
-                .filter(this::isInActiveInventoryBranch)
-                .collect(Collectors.toList());
-        ComboBox<EquipmentCategory> categoryCombo = new ComboBox<>(FXCollections.observableArrayList(filteredCategories));
+        TextArea serialsArea = new TextArea();
+        serialsArea.setPrefRowCount(4);
+        serialsArea.setPromptText("One serial number per line");
+
+        ComboBox<EquipmentBranch> branchCombo = new ComboBox<>(FXCollections.observableArrayList(EquipmentBranch.values()));
+        branchCombo.getSelectionModel().select(existing == null ? activeEquipmentBranch : existing.getBranch());
+
+        ComboBox<LookupItem> equipmentTypeCombo = new ComboBox<>(
+                FXCollections.observableArrayList(lookupDao.findAll(LookupCategory.EQUIPMENT_TYPES)));
+        ComboBox<LookupItem> weaponTypeCombo = new ComboBox<>(
+                FXCollections.observableArrayList(lookupDao.findAll(LookupCategory.WEAPON_TYPES)));
+        ComboBox<LookupItem> caliberCombo = new ComboBox<>(
+                FXCollections.observableArrayList(lookupDao.findAll(LookupCategory.CALIBERS)));
+        ComboBox<LookupItem> sizeCombo = new ComboBox<>(
+                FXCollections.observableArrayList(lookupDao.findAll(LookupCategory.UNIFORM_SIZES)));
+        ComboBox<LookupItem> storageCombo = new ComboBox<>(
+                FXCollections.observableArrayList(lookupDao.findAll(LookupCategory.STORAGE_LOCATIONS)));
         ComboBox<EquipmentCondition> conditionCombo = new ComboBox<>(FXCollections.observableArrayList(EquipmentCondition.values()));
         ComboBox<EquipmentStatus> statusCombo = new ComboBox<>(FXCollections.observableArrayList(EquipmentStatus.values()));
+        CheckBox attachmentCheck = new CheckBox("Is attachment item");
 
-        if (existing == null) {
-            categoryCombo.getSelectionModel().select(
-                filteredCategories.stream()
-                    .filter(EquipmentCategory::isRootCategory)
-                    .findFirst()
-                    .or(() -> filteredCategories.stream().findFirst())
-                    .orElse(null)
-            );
+        equipmentTypeCombo.setEditable(true);
+        weaponTypeCombo.setEditable(true);
+        caliberCombo.setEditable(true);
+        sizeCombo.setEditable(true);
+        storageCombo.setEditable(true);
+        enableLookupTypeAhead(equipmentTypeCombo);
+        enableLookupTypeAhead(weaponTypeCombo);
+        enableLookupTypeAhead(caliberCombo);
+        enableLookupTypeAhead(sizeCombo);
+        enableLookupTypeAhead(storageCombo);
+
+        if (existing != null) {
+            selectLookupById(equipmentTypeCombo, existing.getEquipmentTypeId());
+            selectLookupById(weaponTypeCombo, existing.getWeaponTypeId());
+            selectLookupById(caliberCombo, existing.getCaliberId());
+            selectLookupById(sizeCombo, existing.getSizeId());
+            selectLookupById(storageCombo, existing.getStorageLocationId());
+            conditionCombo.getSelectionModel().select(existing.getCondition());
+            statusCombo.getSelectionModel().select(existing.getStatus());
+            attachmentCheck.setSelected(existing.isAttachment());
         } else {
-            categoryCombo.getSelectionModel().select(
-                filteredCategories.stream()
-                    .filter(category -> category.getCategoryId() == existing.getCategory().getCategoryId())
-                    .findFirst()
-                    .orElse(null)
-            );
+            conditionCombo.getSelectionModel().select(EquipmentCondition.GOOD);
+            statusCombo.getSelectionModel().select(EquipmentStatus.AVAILABLE);
+            storageCombo.getSelectionModel().selectFirst();
+
+            nameField.setEditable(false);
+            nameField.setPromptText("Generated from make/model/category");
+
+            Runnable refreshGeneratedName = () -> nameField.setText(buildGeneratedEquipmentName(
+                    text(makeField),
+                    text(modelField),
+                    branchCombo.getValue(),
+                    selectedName(equipmentTypeCombo),
+                    selectedName(weaponTypeCombo),
+                    selectedName(caliberCombo),
+                    selectedName(sizeCombo)
+            ));
+
+            makeField.textProperty().addListener((obs, oldValue, newValue) -> refreshGeneratedName.run());
+            modelField.textProperty().addListener((obs, oldValue, newValue) -> refreshGeneratedName.run());
+            branchCombo.valueProperty().addListener((obs, oldValue, newValue) -> refreshGeneratedName.run());
+            equipmentTypeCombo.valueProperty().addListener((obs, oldValue, newValue) -> refreshGeneratedName.run());
+            weaponTypeCombo.valueProperty().addListener((obs, oldValue, newValue) -> refreshGeneratedName.run());
+            caliberCombo.valueProperty().addListener((obs, oldValue, newValue) -> refreshGeneratedName.run());
+            sizeCombo.valueProperty().addListener((obs, oldValue, newValue) -> refreshGeneratedName.run());
         }
-        conditionCombo.getSelectionModel().select(existing == null ? EquipmentCondition.GOOD : existing.getCondition());
-        statusCombo.getSelectionModel().select(existing == null ? EquipmentStatus.AVAILABLE : existing.getStatus());
+
+        Runnable applyBranchState = () -> {
+            EquipmentBranch branch = branchCombo.getValue();
+            boolean weapon = branch == EquipmentBranch.WEAPON;
+            boolean uniform = branch == EquipmentBranch.UNIFORM;
+            boolean equipment = branch == EquipmentBranch.EQUIPMENT;
+            equipmentTypeCombo.setDisable(!equipment && !uniform);
+            weaponTypeCombo.setDisable(!weapon);
+            caliberCombo.setDisable(!weapon);
+            sizeCombo.setDisable(!uniform);
+            attachmentCheck.setDisable(branch != EquipmentBranch.EQUIPMENT);
+            if (branch != EquipmentBranch.EQUIPMENT) {
+                attachmentCheck.setSelected(false);
+            }
+        };
+        branchCombo.valueProperty().addListener((obs, oldValue, branch) -> applyBranchState.run());
+        applyBranchState.run();
 
         GridPane grid = new GridPane();
         grid.setHgap(10);
         grid.setVgap(10);
-        grid.add(new Label("Name"), 0, 0);
-        grid.add(nameField, 1, 0);
-        grid.add(new Label("Category"), 0, 1);
-        grid.add(categoryCombo, 1, 1);
-        grid.add(new Label("Serial Number"), 0, 2);
-        grid.add(serialField, 1, 2);
-        grid.add(new Label("Condition"), 0, 3);
-        grid.add(conditionCombo, 1, 3);
-        grid.add(new Label("Status"), 0, 4);
-        grid.add(statusCombo, 1, 4);
+        int row = 0;
+        grid.add(new Label("Branch"), 0, row);
+        grid.add(branchCombo, 1, row++);
+        grid.add(new Label("Make"), 0, row);
+        grid.add(makeField, 1, row++);
+        grid.add(new Label("Model"), 0, row);
+        grid.add(modelField, 1, row++);
+        grid.add(new Label("Name"), 0, row);
+        grid.add(nameField, 1, row++);
+        grid.add(new Label("Equipment Type"), 0, row);
+        grid.add(equipmentTypeCombo, 1, row++);
+        grid.add(new Label("Weapon Type"), 0, row);
+        grid.add(weaponTypeCombo, 1, row++);
+        grid.add(new Label("Caliber"), 0, row);
+        grid.add(caliberCombo, 1, row++);
+        grid.add(new Label("Uniform Size"), 0, row);
+        grid.add(sizeCombo, 1, row++);
+        grid.add(new Label("Storage"), 0, row);
+        grid.add(storageCombo, 1, row++);
+        if (existing == null) {
+            grid.add(new Label("Serial Numbers"), 0, row);
+            grid.add(serialsArea, 1, row++);
+        } else {
+            grid.add(new Label("Serial"), 0, row);
+            grid.add(serialField, 1, row++);
+        }
+        grid.add(new Label("Condition"), 0, row);
+        grid.add(conditionCombo, 1, row++);
+        grid.add(new Label("Status"), 0, row);
+        grid.add(statusCombo, 1, row++);
+        grid.add(attachmentCheck, 1, row);
 
         dialog.getDialogPane().setContent(grid);
         dialog.setResultConverter(buttonType -> {
-            if (buttonType == saveButtonType) {
-                return new EquipmentFormData(
-                        nameField.getText() == null ? "" : nameField.getText().trim(),
-                        categoryCombo.getSelectionModel().getSelectedItem(),
-                        serialField.getText() == null ? "" : serialField.getText().trim(),
-                        conditionCombo.getSelectionModel().getSelectedItem(),
-                        statusCombo.getSelectionModel().getSelectedItem()
-                );
+            if (buttonType != saveButton) {
+                return null;
             }
-            return null;
+            return new EquipmentFormData(
+                    text(nameField),
+                    branchCombo.getValue(),
+                    selectedId(equipmentTypeCombo), selectedName(equipmentTypeCombo),
+                    selectedId(weaponTypeCombo), selectedName(weaponTypeCombo),
+                    selectedId(caliberCombo), selectedName(caliberCombo),
+                    selectedId(sizeCombo), selectedName(sizeCombo),
+                    selectedId(storageCombo), selectedName(storageCombo),
+                    text(serialField),
+                    parseSerials(serialsArea),
+                    conditionCombo.getValue(),
+                    statusCombo.getValue(),
+                    attachmentCheck.isSelected()
+            );
         });
 
         Optional<EquipmentFormData> result = dialog.showAndWait();
@@ -1144,22 +1490,15 @@ public class AdminController {
         }
 
         EquipmentFormData formData = result.get();
-        if (formData.name().isEmpty() || formData.category() == null || formData.condition() == null || formData.status() == null) {
-            UiAlerts.error("Equipment", "Name, category, condition, and status are required.");
+        if (formData.name().isEmpty() || formData.branch() == null || formData.condition() == null || formData.status() == null) {
+            UiAlerts.error("Equipment", "Name, branch, condition, and status are required.");
             return null;
         }
-
+        if (existing == null && formData.serialNumbers().isEmpty()) {
+            UiAlerts.error("Equipment", "Enter at least one serial number to add inventory in bulk.");
+            return null;
+        }
         return formData;
-    }
-
-    private boolean isInActiveInventoryBranch(EquipmentItem item) {
-        return item != null
-                && item.getCategory() != null
-                && currentInventoryBranchKey.equals(item.getCategory().getBranchKey());
-    }
-
-    private boolean isInActiveInventoryBranch(EquipmentCategory category) {
-        return category != null && currentInventoryBranchKey.equals(category.getBranchKey());
     }
 
     private VehicleFormData showVehicleDialog(Vehicle existing) {
@@ -1167,10 +1506,18 @@ public class AdminController {
         dialog.setTitle(existing == null ? "Add Vehicle" : "Edit Vehicle");
         UiAlerts.applyTheme(dialog);
 
-        ButtonType saveButtonType = new ButtonType("Save", ButtonBar.ButtonData.OK_DONE);
-        dialog.getDialogPane().getButtonTypes().addAll(saveButtonType, ButtonType.CANCEL);
+        ButtonType saveButton = new ButtonType("Save", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(saveButton, ButtonType.CANCEL);
 
         TextField unitField = new TextField(existing == null ? "" : existing.getUnitNumber());
+        ComboBox<LookupItem> typeCombo = new ComboBox<>(FXCollections.observableArrayList(
+                lookupDao.findAll(LookupCategory.VEHICLE_TYPES)
+        ));
+        typeCombo.setEditable(true);
+        enableLookupTypeAhead(typeCombo);
+        if (existing != null) {
+            selectLookupById(typeCombo, existing.getVehicleTypeId());
+        }
         TextField makeField = new TextField(existing == null ? "" : existing.getMake());
         TextField modelField = new TextField(existing == null ? "" : existing.getModel());
         TextField yearField = new TextField(existing == null ? "" : String.valueOf(existing.getYear()));
@@ -1182,31 +1529,40 @@ public class AdminController {
         grid.setVgap(10);
         grid.add(new Label("Unit Number"), 0, 0);
         grid.add(unitField, 1, 0);
-        grid.add(new Label("Make"), 0, 1);
-        grid.add(makeField, 1, 1);
-        grid.add(new Label("Model"), 0, 2);
-        grid.add(modelField, 1, 2);
-        grid.add(new Label("Year"), 0, 3);
-        grid.add(yearField, 1, 3);
-        grid.add(new Label("VIN"), 0, 4);
-        grid.add(vinField, 1, 4);
-        grid.add(new Label("Plate"), 0, 5);
-        grid.add(plateField, 1, 5);
+        grid.add(new Label("Vehicle Type"), 0, 1);
+        grid.add(typeCombo, 1, 1);
+        grid.add(new Label("Make"), 0, 2);
+        grid.add(makeField, 1, 2);
+        grid.add(new Label("Model"), 0, 3);
+        grid.add(modelField, 1, 3);
+        grid.add(new Label("Year"), 0, 4);
+        grid.add(yearField, 1, 4);
+        grid.add(new Label("VIN"), 0, 5);
+        grid.add(vinField, 1, 5);
+        grid.add(new Label("Plate"), 0, 6);
+        grid.add(plateField, 1, 6);
 
         dialog.getDialogPane().setContent(grid);
         dialog.setResultConverter(buttonType -> {
-            if (buttonType == saveButtonType) {
-                int year = Integer.parseInt(yearField.getText().trim());
-                return new VehicleFormData(
-                        unitField.getText() == null ? "" : unitField.getText().trim(),
-                        makeField.getText() == null ? "" : makeField.getText().trim(),
-                        modelField.getText() == null ? "" : modelField.getText().trim(),
-                        year,
-                        vinField.getText() == null ? "" : vinField.getText().trim(),
-                        plateField.getText() == null ? "" : plateField.getText().trim()
-                );
+            if (buttonType != saveButton) {
+                return null;
             }
-            return null;
+            int year;
+            try {
+                year = Integer.parseInt(text(yearField));
+            } catch (NumberFormatException ex) {
+                UiAlerts.error("Vehicles", "Year must be a valid number.");
+                return null;
+            }
+            return new VehicleFormData(
+                    text(unitField),
+                    selectedId(typeCombo),
+                    text(makeField),
+                    text(modelField),
+                    year,
+                    text(vinField),
+                    text(plateField)
+            );
         });
 
         Optional<VehicleFormData> result = dialog.showAndWait();
@@ -1215,11 +1571,186 @@ public class AdminController {
         }
 
         VehicleFormData formData = result.get();
-        if (formData.unitNumber().isEmpty() || formData.make().isEmpty() || formData.model().isEmpty()) {
+        if (formData == null || formData.unitNumber().isEmpty() || formData.make().isEmpty() || formData.model().isEmpty()) {
             UiAlerts.error("Vehicles", "Unit number, make, and model are required.");
             return null;
         }
         return formData;
+    }
+
+    private MaintenanceFormData showMaintenanceDialog(Vehicle vehicle) {
+        Dialog<MaintenanceFormData> dialog = new Dialog<>();
+        dialog.setTitle("Add Maintenance Log");
+        dialog.setHeaderText("Vehicle: " + vehicle.getUnitNumber());
+        UiAlerts.applyTheme(dialog);
+
+        ButtonType saveButton = new ButtonType("Save", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(saveButton, ButtonType.CANCEL);
+
+        DatePicker datePicker = new DatePicker(LocalDate.now());
+        TextField mileageField = new TextField();
+        TextField costField = new TextField();
+        TextField byField = new TextField();
+        TextArea descriptionArea = new TextArea();
+        descriptionArea.setPrefRowCount(4);
+
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(10);
+        grid.add(new Label("Date"), 0, 0);
+        grid.add(datePicker, 1, 0);
+        grid.add(new Label("Mileage"), 0, 1);
+        grid.add(mileageField, 1, 1);
+        grid.add(new Label("Cost"), 0, 2);
+        grid.add(costField, 1, 2);
+        grid.add(new Label("Performed By"), 0, 3);
+        grid.add(byField, 1, 3);
+        grid.add(new Label("Description"), 0, 4);
+        grid.add(descriptionArea, 1, 4);
+
+        dialog.getDialogPane().setContent(grid);
+        dialog.setResultConverter(buttonType -> {
+            if (buttonType != saveButton) {
+                return null;
+            }
+
+            Integer mileage = null;
+            String mileageText = text(mileageField);
+            if (!mileageText.isEmpty()) {
+                try {
+                    mileage = Integer.parseInt(mileageText);
+                } catch (NumberFormatException ex) {
+                    UiAlerts.error("Maintenance", "Mileage must be a whole number.");
+                    return null;
+                }
+            }
+
+            Double cost = null;
+            String costText = text(costField);
+            if (!costText.isEmpty()) {
+                try {
+                    cost = Double.parseDouble(costText);
+                } catch (NumberFormatException ex) {
+                    UiAlerts.error("Maintenance", "Cost must be numeric.");
+                    return null;
+                }
+            }
+
+            return new MaintenanceFormData(
+                    datePicker.getValue(),
+                    mileage,
+                    cost,
+                    text(descriptionArea),
+                    text(byField)
+            );
+        });
+
+        Optional<MaintenanceFormData> result = dialog.showAndWait();
+        if (result.isEmpty()) {
+            return null;
+        }
+
+        MaintenanceFormData formData = result.get();
+        if (formData == null || formData.logDate() == null || formData.description().isEmpty()) {
+            UiAlerts.error("Maintenance", "Date and description are required.");
+            return null;
+        }
+        return formData;
+    }
+
+    private void selectLookupById(ComboBox<LookupItem> comboBox, Integer id) {
+        if (id == null) {
+            return;
+        }
+        comboBox.getSelectionModel().select(
+                comboBox.getItems().stream().filter(item -> item.getId() == id).findFirst().orElse(null)
+        );
+    }
+
+    private Integer selectedId(ComboBox<LookupItem> comboBox) {
+        LookupItem item = comboBox.getSelectionModel().getSelectedItem();
+        return item == null ? null : item.getId();
+    }
+
+    private void enableLookupTypeAhead(ComboBox<LookupItem> comboBox) {
+        comboBox.getEditor().textProperty().addListener((obs, oldValue, newValue) -> {
+            String query = newValue == null ? "" : newValue.trim().toLowerCase();
+            if (query.isEmpty()) {
+                return;
+            }
+            comboBox.getItems().stream()
+                    .filter(item -> item.getName().toLowerCase().startsWith(query))
+                    .findFirst()
+                    .ifPresent(match -> comboBox.getSelectionModel().select(match));
+        });
+    }
+
+    private String selectedName(ComboBox<LookupItem> comboBox) {
+        LookupItem item = comboBox.getSelectionModel().getSelectedItem();
+        return item == null ? null : item.getName();
+    }
+
+    private static String text(TextField textField) {
+        return textField.getText() == null ? "" : textField.getText().trim();
+    }
+
+    private static String text(TextArea textArea) {
+        return textArea.getText() == null ? "" : textArea.getText().trim();
+    }
+
+    private static List<String> parseSerials(TextArea serialsArea) {
+        if (serialsArea == null || serialsArea.getText() == null) {
+            return List.of();
+        }
+        return serialsArea.getText().lines()
+                .map(String::trim)
+                .filter(value -> !value.isEmpty())
+                .distinct()
+                .collect(Collectors.toList());
+    }
+
+    private static String buildGeneratedEquipmentName(String make,
+                                                      String model,
+                                                      EquipmentBranch branch,
+                                                      String equipmentType,
+                                                      String weaponType,
+                                                      String caliber,
+                                                      String size) {
+        List<String> parts = new ArrayList<>();
+        if (!make.isEmpty()) {
+            parts.add(make);
+        }
+        if (!model.isEmpty()) {
+            parts.add(model);
+        }
+        if (branch == null) {
+            return String.join(" ", parts);
+        }
+
+        switch (branch) {
+            case WEAPON -> {
+                if (weaponType != null && !weaponType.isBlank()) {
+                    parts.add(weaponType);
+                }
+                if (caliber != null && !caliber.isBlank()) {
+                    parts.add(caliber);
+                }
+            }
+            case UNIFORM -> {
+                if (equipmentType != null && !equipmentType.isBlank()) {
+                    parts.add(equipmentType);
+                }
+                if (size != null && !size.isBlank()) {
+                    parts.add("Size " + size);
+                }
+            }
+            case EQUIPMENT -> {
+                if (equipmentType != null && !equipmentType.isBlank()) {
+                    parts.add(equipmentType);
+                }
+            }
+        }
+        return String.join(" - ", parts);
     }
 
     private void forceLogoutToLogin() {
@@ -1237,14 +1768,41 @@ public class AdminController {
     private record UserFormData(String username, String password, UserRole role, Officer officer) {
     }
 
-    private record EquipmentFormData(String name, EquipmentCategory category, String serialNumber,
-                                     EquipmentCondition condition, EquipmentStatus status) {
+    private record EquipmentFormData(String name,
+                                     EquipmentBranch branch,
+                                     Integer equipmentTypeId, String equipmentTypeName,
+                                     Integer weaponTypeId, String weaponTypeName,
+                                     Integer caliberId, String caliberName,
+                                     Integer sizeId, String sizeName,
+                                     Integer storageLocationId, String storageLocationName,
+                                     String serialNumber,
+                                     List<String> serialNumbers,
+                                     EquipmentCondition condition,
+                                     EquipmentStatus status,
+                                     boolean attachment) {
+        private EquipmentItem toItem(int itemId, String serialOverride) {
+            return new EquipmentItem(
+                    itemId,
+                    name,
+                    branch,
+                    equipmentTypeId, equipmentTypeName,
+                    weaponTypeId, weaponTypeName,
+                    caliberId, caliberName,
+                    sizeId, sizeName,
+                    storageLocationId, storageLocationName,
+                    serialOverride,
+                    condition,
+                    status,
+                    attachment
+            );
+        }
     }
 
-    private record VehicleFormData(String unitNumber, String make, String model, int year,
-                                   String vin, String plate) {
+    private record VehicleFormData(String unitNumber, Integer vehicleTypeId, String make, String model,
+                                   int year, String vin, String plate) {
     }
 
-    private record MaintenanceFormData(LocalDate logDate, Integer mileage, String description, String performedBy) {
+    private record MaintenanceFormData(LocalDate logDate, Integer mileage, Double cost,
+                                       String description, String performedBy) {
     }
 }

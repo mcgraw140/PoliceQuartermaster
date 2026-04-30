@@ -5,167 +5,278 @@
 <?import javafx.scene.control.DatePicker?>
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.ListView?>
+<?import javafx.scene.control.ScrollPane?>
 <?import javafx.scene.control.Separator?>
 <?import javafx.scene.control.TableColumn?>
 <?import javafx.scene.control.TableView?>
+<?import javafx.scene.control.TextField?>
 <?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.FlowPane?>
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.Priority?>
+<?import javafx.scene.layout.Region?>
 <?import javafx.scene.layout.StackPane?>
 <?import javafx.scene.layout.VBox?>
 
 <BorderPane xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
-            fx:controller="com.quartermaster.controller.AdminController">
+            fx:controller="com.quartermaster.controller.AdminController" styleClass="root-pane">
     <top>
-        <HBox spacing="10" style="-fx-padding: 10;">
-            <Label fx:id="welcomeLabel" text="Admin" style="-fx-font-size: 15px; -fx-font-weight: bold;"/>
-            <Button text="Refresh All" onAction="#onRefreshAll"/>
-            <Button text="Logout" onAction="#onLogout"/>
-        </HBox>
+        <VBox>
+            <HBox styleClass="top-bar" alignment="CENTER_LEFT" spacing="18">
+                <VBox spacing="2">
+                    <Label text="Police Quartermaster" styleClass="brand-title"/>
+                    <Label fx:id="welcomeLabel" text="Admin" styleClass="brand-subtitle"/>
+                </VBox>
+                <HBox styleClass="main-module-tabs" spacing="8" alignment="CENTER_RIGHT">
+                    <Button fx:id="topTabEquipment"   text="Equipment"    onAction="#onTopTabEquipment"   styleClass="nav-tab"/>
+                    <Button fx:id="topTabIssueReturn" text="Issue / Return" onAction="#onTopTabIssueReturn" styleClass="nav-tab"/>
+                    <Button fx:id="topTabAdmin"       text="Admin"        onAction="#onTopTabAdmin"       styleClass="nav-tab"/>
+                    <Button fx:id="topTabVehicle"     text="Vehicle"      onAction="#onTopTabVehicle"     styleClass="nav-tab"/>
+                </HBox>
+                <Region HBox.hgrow="ALWAYS"/>
+                <Separator orientation="VERTICAL"/>
+                <Button text="Refresh" onAction="#onRefreshAll" styleClass="btn-secondary"/>
+                <Button text="Logout"  onAction="#onLogout"    styleClass="btn-danger"/>
+            </HBox>
+            <HBox fx:id="moduleNavBar" styleClass="module-nav" alignment="CENTER_LEFT" spacing="6">
+                <Label fx:id="moduleNavLabel" text="" styleClass="module-nav-label"/>
+            </HBox>
+        </VBox>
     </top>
 
     <center>
-        <HBox spacing="0" style="-fx-padding: 0 10 10 10;">
-            <VBox prefWidth="190" spacing="8" style="-fx-padding: 10; -fx-background-color: #141922;">
-                <Label text="Modules" style="-fx-font-weight: bold; -fx-font-size: 14px;"/>
-                <ListView fx:id="moduleNavList" prefHeight="600"/>
-            </VBox>
+        <ScrollPane fitToWidth="true" styleClass="page-scroll">
+            <StackPane fx:id="workspace" styleClass="workspace">
 
-            <Separator orientation="VERTICAL"/>
+                <!-- ===== Inventory pane (Weapons / Equipment / Uniforms) ===== -->
+                <VBox fx:id="moduleInventoryPane" spacing="12" styleClass="page-content">
+                    <HBox alignment="CENTER_LEFT" spacing="12">
+                        <Label fx:id="inventoryModuleTitleLabel" text="Equipment" styleClass="page-title"/>
+                        <Region HBox.hgrow="ALWAYS"/>
+                        <Label fx:id="inventorySummaryLabel" text="" styleClass="muted"/>
+                    </HBox>
 
-            <StackPane style="-fx-padding: 10;" HBox.hgrow="ALWAYS">
-                <VBox fx:id="moduleInventoryPane" spacing="8">
-                    <Label fx:id="inventoryModuleTitleLabel" text="Weapons" style="-fx-font-size: 16px; -fx-font-weight: bold;"/>
-                    <HBox spacing="8">
-                        <Button text="Add" onAction="#onAddEquipment"/>
-                        <Button text="Edit" onAction="#onEditEquipment"/>
-                        <Button text="Delete" onAction="#onDeleteEquipment"/>
-                        <Button fx:id="attachItemButton" text="Attach Item To Weapon" onAction="#onAttachItemToWeapon"/>
-                        <Button fx:id="removeAttachmentButton" text="Remove Attachment" onAction="#onRemoveAttachmentFromWeapon"/>
-                    </HBox>
-                    <TableView fx:id="equipmentTable" VBox.vgrow="ALWAYS">
-                        <columns>
-                            <TableColumn fx:id="equipmentNameColumn" text="Name" prefWidth="260"/>
-                            <TableColumn fx:id="equipmentCategoryColumn" text="Category" prefWidth="260"/>
-                            <TableColumn fx:id="equipmentSerialColumn" text="Serial" prefWidth="200"/>
-                            <TableColumn fx:id="equipmentConditionColumn" text="Condition" prefWidth="120"/>
-                            <TableColumn fx:id="equipmentStatusColumn" text="Status" prefWidth="120"/>
-                        </columns>
-                    </TableView>
-                    <HBox spacing="8">
-                        <Label text="Officer"/>
-                        <ComboBox fx:id="issueOfficerCombo" prefWidth="220"/>
-                        <Label text="Item"/>
-                        <ComboBox fx:id="issueItemCombo" prefWidth="220"/>
-                        <Label text="Date"/>
-                        <DatePicker fx:id="issueDatePicker"/>
-                        <Button text="Issue" onAction="#onIssueSelectedItem"/>
-                        <Button text="Return Selected" onAction="#onReturnSelectedItem"/>
-                    </HBox>
-                    <TableView fx:id="issuanceTable" VBox.vgrow="ALWAYS">
-                        <columns>
-                            <TableColumn fx:id="issuanceOfficerColumn" text="Officer" prefWidth="260"/>
-                            <TableColumn fx:id="issuanceItemColumn" text="Item" prefWidth="280"/>
-                            <TableColumn fx:id="issuanceDateColumn" text="Issued Date" prefWidth="140"/>
-                            <TableColumn fx:id="returnDateColumn" text="Returned Date" prefWidth="140"/>
-                        </columns>
-                    </TableView>
+                    <VBox styleClass="card" spacing="10">
+                        <Label text="Filters" styleClass="section-title"/>
+                        <FlowPane hgap="8" vgap="8">
+                            <Label text="Search"/>
+                            <TextField fx:id="inventorySearchField" promptText="Name, type, or serial" prefWidth="280"/>
+                            <Label text="Status"/>
+                            <ComboBox fx:id="inventoryStatusFilterCombo" prefWidth="160"/>
+                            <Button text="Clear" onAction="#onClearInventoryFilters" styleClass="btn-secondary"/>
+                        </FlowPane>
+                    </VBox>
+
+                    <VBox styleClass="card" spacing="10" VBox.vgrow="ALWAYS">
+                        <HBox alignment="CENTER_LEFT" spacing="10">
+                            <Label text="Inventory" styleClass="section-title"/>
+                            <Region HBox.hgrow="ALWAYS"/>
+                            <Button text="Add"    onAction="#onAddEquipment"    styleClass="btn-primary"/>
+                            <Button text="Edit"   onAction="#onEditEquipment"   styleClass="btn-secondary"/>
+                            <Button text="Delete" onAction="#onDeleteEquipment" styleClass="btn-danger"/>
+                            <Button fx:id="attachItemButton"      text="Attach Item"      onAction="#onAttachItemToWeapon"        styleClass="btn-secondary"/>
+                            <Button fx:id="removeAttachmentButton" text="Remove Attachment" onAction="#onRemoveAttachmentFromWeapon" styleClass="btn-secondary"/>
+                        </HBox>
+                        <TableView fx:id="equipmentTable" VBox.vgrow="ALWAYS" styleClass="app-table">
+                            <columns>
+                                <TableColumn fx:id="equipmentNameColumn"      text="Name"     prefWidth="240"/>
+                                <TableColumn fx:id="equipmentCategoryColumn"  text="Category" prefWidth="240"/>
+                                <TableColumn fx:id="equipmentLocationColumn"  text="Location" prefWidth="160"/>
+                                <TableColumn fx:id="equipmentSerialColumn"    text="Serial"   prefWidth="180"/>
+                                <TableColumn fx:id="equipmentConditionColumn" text="Condition" prefWidth="110"/>
+                                <TableColumn fx:id="equipmentStatusColumn"    text="Status"   prefWidth="120"/>
+                            </columns>
+                        </TableView>
+                    </VBox>
+
                 </VBox>
 
-                <VBox fx:id="moduleFleetPane" spacing="8" visible="false" managed="false">
-                    <Label text="Vehicles" style="-fx-font-size: 16px; -fx-font-weight: bold;"/>
-                    <HBox spacing="8">
-                        <Button text="Add" onAction="#onAddVehicle"/>
-                        <Button text="Edit" onAction="#onEditVehicle"/>
-                        <Button text="Delete" onAction="#onDeleteVehicle"/>
-                    </HBox>
-                    <TableView fx:id="vehiclesTable" VBox.vgrow="ALWAYS">
-                        <columns>
-                            <TableColumn fx:id="vehicleUnitColumn" text="Unit Number" prefWidth="120"/>
-                            <TableColumn fx:id="vehicleMakeColumn" text="Make" prefWidth="130"/>
-                            <TableColumn fx:id="vehicleModelColumn" text="Model" prefWidth="140"/>
-                            <TableColumn fx:id="vehicleYearColumn" text="Year" prefWidth="90"/>
-                            <TableColumn fx:id="vehicleVinColumn" text="VIN" prefWidth="190"/>
-                            <TableColumn fx:id="vehiclePlateColumn" text="Plate" prefWidth="120"/>
-                        </columns>
-                    </TableView>
-                    <Separator/>
-                    <Label text="Maintenance Logs" style="-fx-font-weight: bold;"/>
-                    <HBox spacing="8">
-                        <Label text="Vehicle"/>
-                        <ComboBox fx:id="maintenanceVehicleCombo" prefWidth="300" onAction="#onMaintenanceVehicleChanged"/>
-                        <Button text="Add Log" onAction="#onAddMaintenanceLog"/>
-                    </HBox>
-                    <TableView fx:id="maintenanceTable" VBox.vgrow="ALWAYS">
-                        <columns>
-                            <TableColumn fx:id="maintenanceDateColumn" text="Date" prefWidth="130"/>
-                            <TableColumn fx:id="maintenanceMileageColumn" text="Mileage" prefWidth="130"/>
-                            <TableColumn fx:id="maintenanceDescriptionColumn" text="Description" prefWidth="380"/>
-                            <TableColumn fx:id="maintenanceByColumn" text="Performed By" prefWidth="200"/>
-                        </columns>
-                    </TableView>
+                <!-- ===== Issue / Return pane ===== -->
+                <VBox fx:id="moduleIssuePane" spacing="12" visible="false" managed="false" styleClass="page-content">
+                    <Label text="Issue / Return" styleClass="page-title"/>
+
+                    <VBox styleClass="card" spacing="10">
+                        <Label text="Assign Equipment" styleClass="section-title"/>
+                        <FlowPane hgap="8" vgap="8">
+                            <Label text="Officer"/>
+                            <ComboBox fx:id="issueOfficerCombo" prefWidth="220"/>
+                            <Label text="Date"/>
+                            <DatePicker fx:id="issueDatePicker"/>
+                            <Region prefWidth="20"/>
+                            <Button text="Issue Selected" onAction="#onIssueSelectedItem" styleClass="btn-primary"/>
+                        </FlowPane>
+
+                        <HBox spacing="10" alignment="CENTER_LEFT">
+                            <Label text="Search"/>
+                            <TextField fx:id="issueSearchField" promptText="Search by name, category, or serial" prefWidth="360"/>
+                        </HBox>
+
+                        <HBox spacing="12" VBox.vgrow="ALWAYS">
+                            <VBox spacing="8" HBox.hgrow="ALWAYS">
+                                <Label text="Available Items (sortable)" styleClass="muted"/>
+                                <TableView fx:id="issueAvailableTable" prefHeight="240" styleClass="app-table" HBox.hgrow="ALWAYS" VBox.vgrow="ALWAYS">
+                                    <columns>
+                                        <TableColumn fx:id="issueAvailableNameColumn" text="Name" prefWidth="240"/>
+                                        <TableColumn fx:id="issueAvailableCategoryColumn" text="Category" prefWidth="210"/>
+                                        <TableColumn fx:id="issueAvailableSerialColumn" text="Serial" prefWidth="160"/>
+                                    </columns>
+                                </TableView>
+                            </VBox>
+
+                            <VBox spacing="8" alignment="CENTER">
+                                <Region VBox.vgrow="ALWAYS"/>
+                                <Button text=">>" onAction="#onAddIssueSelection" styleClass="btn-secondary"/>
+                                <Button text="<<" onAction="#onRemoveIssueSelection" styleClass="btn-secondary"/>
+                                <Region VBox.vgrow="ALWAYS"/>
+                            </VBox>
+
+                            <VBox spacing="8" HBox.hgrow="ALWAYS">
+                                <Label text="Selected To Issue" styleClass="muted"/>
+                                <TableView fx:id="issueSelectedTable" prefHeight="240" styleClass="app-table" HBox.hgrow="ALWAYS" VBox.vgrow="ALWAYS">
+                                    <columns>
+                                        <TableColumn fx:id="issueSelectedNameColumn" text="Name" prefWidth="240"/>
+                                        <TableColumn fx:id="issueSelectedCategoryColumn" text="Category" prefWidth="210"/>
+                                        <TableColumn fx:id="issueSelectedSerialColumn" text="Serial" prefWidth="160"/>
+                                    </columns>
+                                </TableView>
+                            </VBox>
+                        </HBox>
+                    </VBox>
+
+                    <VBox styleClass="card" spacing="10" VBox.vgrow="ALWAYS">
+                        <HBox alignment="CENTER_LEFT" spacing="10">
+                            <Label text="Active And Past Issuances" styleClass="section-title"/>
+                            <Region HBox.hgrow="ALWAYS"/>
+                            <Button text="Return Selected" onAction="#onReturnSelectedItem" styleClass="btn-secondary"/>
+                        </HBox>
+                        <TableView fx:id="issuanceTable" VBox.vgrow="ALWAYS" styleClass="app-table">
+                            <columns>
+                                <TableColumn fx:id="issuanceOfficerColumn" text="Officer"       prefWidth="240"/>
+                                <TableColumn fx:id="issuanceItemColumn"    text="Item"          prefWidth="320"/>
+                                <TableColumn fx:id="issuanceDateColumn"    text="Issued Date"   prefWidth="140"/>
+                                <TableColumn fx:id="returnDateColumn"      text="Returned Date" prefWidth="140"/>
+                            </columns>
+                        </TableView>
+                    </VBox>
                 </VBox>
 
-                <VBox fx:id="moduleSettingsPane" spacing="12" visible="false" managed="false">
-                    <Label text="Admin Settings" style="-fx-font-size: 16px; -fx-font-weight: bold;"/>
+                <!-- ===== Fleet pane ===== -->
+                <VBox fx:id="moduleFleetPane" spacing="12" visible="false" managed="false" styleClass="page-content">
+                    <Label text="Vehicles" styleClass="page-title"/>
 
-                    <Label text="Personnel" style="-fx-font-weight: bold;"/>
-                    <HBox spacing="8">
-                        <Button text="Add Officer" onAction="#onAddOfficer"/>
-                        <Button text="Edit Officer" onAction="#onEditOfficer"/>
-                        <Button text="Delete Officer" onAction="#onDeleteOfficer"/>
-                    </HBox>
-                    <TableView fx:id="officersTable" prefHeight="220">
-                        <columns>
-                            <TableColumn fx:id="officerIdColumn" text="Officer ID" prefWidth="100"/>
-                            <TableColumn fx:id="officerNameColumn" text="Name" prefWidth="280"/>
-                            <TableColumn fx:id="officerRankColumn" text="Rank" prefWidth="180"/>
-                            <TableColumn fx:id="officerBadgeColumn" text="Badge Number" prefWidth="180"/>
-                        </columns>
-                    </TableView>
+                    <VBox styleClass="card" spacing="10" VBox.vgrow="ALWAYS">
+                        <HBox alignment="CENTER_LEFT" spacing="10">
+                            <Label text="Fleet" styleClass="section-title"/>
+                            <Region HBox.hgrow="ALWAYS"/>
+                            <Button text="Add"    onAction="#onAddVehicle"    styleClass="btn-primary"/>
+                            <Button text="Edit"   onAction="#onEditVehicle"   styleClass="btn-secondary"/>
+                            <Button text="Delete" onAction="#onDeleteVehicle" styleClass="btn-danger"/>
+                        </HBox>
+                        <TableView fx:id="vehiclesTable" VBox.vgrow="ALWAYS" styleClass="app-table">
+                            <columns>
+                                <TableColumn fx:id="vehicleUnitColumn"  text="Unit Number" prefWidth="120"/>
+                                <TableColumn fx:id="vehicleTypeColumn"  text="Type"        prefWidth="160"/>
+                                <TableColumn fx:id="vehicleMakeColumn"  text="Make"        prefWidth="130"/>
+                                <TableColumn fx:id="vehicleModelColumn" text="Model"       prefWidth="140"/>
+                                <TableColumn fx:id="vehicleYearColumn"  text="Year"        prefWidth="80"/>
+                                <TableColumn fx:id="vehicleVinColumn"   text="VIN"         prefWidth="180"/>
+                                <TableColumn fx:id="vehiclePlateColumn" text="Plate"       prefWidth="120"/>
+                            </columns>
+                        </TableView>
+                    </VBox>
 
-                    <Separator/>
-                    <Label text="Login Personnel" style="-fx-font-weight: bold;"/>
-                    <HBox spacing="8">
-                        <Button text="Add Login" onAction="#onAddLoginPersonnel"/>
-                        <Button text="Delete Login" onAction="#onDeleteLoginPersonnel"/>
-                    </HBox>
-                    <TableView fx:id="usersTable" prefHeight="220">
-                        <columns>
-                            <TableColumn fx:id="userIdColumn" text="User ID" prefWidth="100"/>
-                            <TableColumn fx:id="usernameColumn" text="Username" prefWidth="260"/>
-                            <TableColumn fx:id="roleColumn" text="Role" prefWidth="140"/>
-                            <TableColumn fx:id="linkedOfficerColumn" text="Linked Officer ID" prefWidth="180"/>
-                        </columns>
-                    </TableView>
+                    <VBox styleClass="card" spacing="10">
+                        <Label text="Maintenance Logs" styleClass="section-title"/>
+                        <FlowPane hgap="8" vgap="8">
+                            <Label text="Vehicle"/>
+                            <ComboBox fx:id="maintenanceVehicleCombo" prefWidth="280" onAction="#onMaintenanceVehicleChanged"/>
+                            <Button text="Add Log" onAction="#onAddMaintenanceLog" styleClass="btn-secondary"/>
+                        </FlowPane>
+                        <TableView fx:id="maintenanceTable" prefHeight="220" styleClass="app-table">
+                            <columns>
+                                <TableColumn fx:id="maintenanceDateColumn"        text="Date"         prefWidth="120"/>
+                                <TableColumn fx:id="maintenanceMileageColumn"     text="Mileage"      prefWidth="100"/>
+                                <TableColumn fx:id="maintenanceDescriptionColumn" text="Description"  prefWidth="380"/>
+                                <TableColumn fx:id="maintenanceByColumn"          text="Performed By" prefWidth="170"/>
+                                <TableColumn fx:id="maintenanceCostColumn"        text="Cost"        prefWidth="120"/>
+                            </columns>
+                        </TableView>
+                    </VBox>
+                </VBox>
 
-                    <Separator/>
+                <!-- ===== Admin pane (Officers, Logins, Lookups) ===== -->
+                <VBox fx:id="moduleAdminPane" spacing="12" visible="false" managed="false" styleClass="page-content">
+                    <Label fx:id="adminSubModuleTitle" text="Personnel" styleClass="page-title"/>
 
-                    <Label text="Category Path" style="-fx-font-weight: bold;"/>
-                    <HBox spacing="8">
-                        <Button text="Add Subcategory" onAction="#onAddSubcategory"/>
-                        <Button text="Delete Category" onAction="#onDeleteCategory"/>
-                    </HBox>
-                    <TableView fx:id="categoryTable" VBox.vgrow="ALWAYS">
-                        <columns>
-                            <TableColumn fx:id="categoryPathColumn" text="Category Path" prefWidth="430"/>
-                            <TableColumn fx:id="categoryTypeColumn" text="Type" prefWidth="170"/>
-                        </columns>
-                    </TableView>
+                    <!-- Personnel sub-pane -->
+                    <VBox fx:id="adminPersonnelPane" spacing="12">
+                        <VBox styleClass="card" spacing="10">
+                            <HBox alignment="CENTER_LEFT" spacing="10">
+                                <Label text="Officers" styleClass="section-title"/>
+                                <Region HBox.hgrow="ALWAYS"/>
+                                <Button text="Add"    onAction="#onAddOfficer"    styleClass="btn-primary"/>
+                                <Button text="Edit"   onAction="#onEditOfficer"   styleClass="btn-secondary"/>
+                                <Button text="Delete" onAction="#onDeleteOfficer" styleClass="btn-danger"/>
+                            </HBox>
+                            <TableView fx:id="officersTable" prefHeight="240" styleClass="app-table">
+                                <columns>
+                                    <TableColumn fx:id="officerIdColumn"    text="Officer ID"    prefWidth="100"/>
+                                    <TableColumn fx:id="officerNameColumn"  text="Name"          prefWidth="280"/>
+                                    <TableColumn fx:id="officerRankColumn"  text="Rank"          prefWidth="180"/>
+                                    <TableColumn fx:id="officerBadgeColumn" text="Badge Number"  prefWidth="160"/>
+                                </columns>
+                            </TableView>
+                        </VBox>
+
+                        <VBox styleClass="card" spacing="10">
+                            <HBox alignment="CENTER_LEFT" spacing="10">
+                                <Label text="Login Personnel" styleClass="section-title"/>
+                                <Region HBox.hgrow="ALWAYS"/>
+                                <Button text="Add"    onAction="#onAddLoginPersonnel"    styleClass="btn-primary"/>
+                                <Button text="Delete" onAction="#onDeleteLoginPersonnel" styleClass="btn-danger"/>
+                            </HBox>
+                            <TableView fx:id="usersTable" prefHeight="220" styleClass="app-table">
+                                <columns>
+                                    <TableColumn fx:id="userIdColumn"        text="User ID"          prefWidth="100"/>
+                                    <TableColumn fx:id="usernameColumn"      text="Username"         prefWidth="240"/>
+                                    <TableColumn fx:id="roleColumn"          text="Role"             prefWidth="120"/>
+                                    <TableColumn fx:id="linkedOfficerColumn" text="Linked Officer ID" prefWidth="180"/>
+                                </columns>
+                            </TableView>
+                        </VBox>
+                    </VBox>
+
+                    <!-- Lookup admin sub-pane -->
+                    <VBox fx:id="adminLookupsPane" spacing="10" visible="false" managed="false" VBox.vgrow="ALWAYS">
+                        <Label text="Lookup tables" styleClass="muted"/>
+                        <HBox spacing="12" VBox.vgrow="ALWAYS">
+                            <VBox styleClass="card" spacing="6" prefWidth="240">
+                                <Label text="Categories" styleClass="section-title"/>
+                                <Separator/>
+                                <ListView fx:id="lookupCategoryList" VBox.vgrow="ALWAYS" styleClass="lookup-category-list"/>
+                            </VBox>
+                            <VBox styleClass="card" spacing="10" HBox.hgrow="ALWAYS">
+                                <Label fx:id="lookupEditorTitle" text="Select a category" styleClass="section-title"/>
+                                <Separator/>
+                                <HBox spacing="8" alignment="CENTER_LEFT">
+                                    <TextField fx:id="lookupNewItemField" promptText="New value..." HBox.hgrow="ALWAYS"/>
+                                    <Button text="Add"    onAction="#onLookupAdd"    styleClass="btn-primary"/>
+                                    <Button text="Rename" onAction="#onLookupRename" styleClass="btn-secondary"/>
+                                    <Button text="Delete" onAction="#onLookupDelete" styleClass="btn-danger"/>
+                                </HBox>
+                                <ListView fx:id="lookupItemList" VBox.vgrow="ALWAYS" styleClass="lookup-item-list"/>
+                            </VBox>
+                        </HBox>
+                    </VBox>
+
+                    <VBox fx:id="adminSettingsPane" spacing="10" visible="false" managed="false" VBox.vgrow="ALWAYS">
+                        <VBox styleClass="card" spacing="10">
+                            <Label text="Settings" styleClass="section-title"/>
+                            <Label text="System-level options can be added here (defaults, policy toggles, print preferences)." wrapText="true"/>
+                        </VBox>
+                    </VBox>
                 </VBox>
             </StackPane>
-
-            <Separator orientation="VERTICAL"/>
-
-            <VBox prefWidth="250" spacing="8" style="-fx-padding: 10; -fx-background-color: #141922;">
-                <Label text="Details" style="-fx-font-weight: bold; -fx-font-size: 14px;"/>
-                <Label fx:id="detailTitleLabel" text="Record Details" style="-fx-font-size: 13px; -fx-font-weight: bold;"/>
-                <Separator/>
-                <Label fx:id="detailLine1Label" wrapText="true"/>
-                <Label fx:id="detailLine2Label" wrapText="true"/>
-                <Label fx:id="detailLine3Label" wrapText="true"/>
-                <Label fx:id="detailLine4Label" wrapText="true"/>
-            </VBox>
-        </HBox>
+        </ScrollPane>
     </center>
 </BorderPane>

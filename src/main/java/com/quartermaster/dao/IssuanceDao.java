@@ -1,10 +1,10 @@
 package com.quartermaster.dao;
 
 import com.quartermaster.db.DatabaseManager;
-import com.quartermaster.model.EquipmentCategory;
+import com.quartermaster.model.EquipmentBranch;
+import com.quartermaster.model.EquipmentStatus;
 import com.quartermaster.model.IssuanceAdminRow;
 import com.quartermaster.model.IssuedItemRow;
-import com.quartermaster.model.EquipmentStatus;
 
 import java.sql.Connection;
 import java.sql.Date;
@@ -16,27 +16,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class IssuanceDao {
-    private static final String CATEGORY_CTE = """
-            WITH RECURSIVE category_tree AS (
-                SELECT category_id,
-                       name,
-                       parent_category_id,
-                       system_key,
-                       CAST(name AS CHAR(500)) AS category_path,
-                       system_key AS branch_key
-                FROM equipment_categories
-                WHERE parent_category_id IS NULL
-                UNION ALL
-                SELECT c.category_id,
-                       c.name,
-                       c.parent_category_id,
-                       c.system_key,
-                       CONCAT(ct.category_path, ' / ', c.name) AS category_path,
-                       COALESCE(c.system_key, ct.branch_key) AS branch_key
-                FROM equipment_categories c
-                JOIN category_tree ct ON c.parent_category_id = ct.category_id
-            )
-            """;
 
     public List<IssuanceAdminRow> findAll() {
         String sql = """
@@ -52,9 +31,7 @@ public class IssuanceDao {
                 JOIN equipment_items e ON e.item_id = i.item_id
                 ORDER BY i.issued_date DESC, i.issuance_id DESC
                 """;
-
         List<IssuanceAdminRow> rows = new ArrayList<>();
-
         try (Connection connection = DatabaseManager.getConnection();
              PreparedStatement preparedStatement = connection.prepareStatement(sql);
              ResultSet rs = preparedStatement.executeQuery()) {
@@ -77,46 +54,30 @@ public class IssuanceDao {
     }
 
     public void issueItem(int officerId, int itemId, LocalDate issuedDate) {
-        String itemCategorySql = CATEGORY_CTE + """
-            SELECT ct.branch_key
-            FROM equipment_items e
-            JOIN category_tree ct ON ct.category_id = e.category_id
-            WHERE e.item_id = ?
-            """;
-        String insertIssuanceSql = "INSERT INTO issuances(officer_id, item_id, issued_date, returned_date) VALUES(?, ?, ?, NULL)";
-
+        String insertSql = "INSERT INTO issuances(officer_id, item_id, issued_date, returned_date) VALUES(?, ?, ?, NULL)";
         EquipmentDao equipmentDao = new EquipmentDao();
 
         try (Connection connection = DatabaseManager.getConnection()) {
             connection.setAutoCommit(false);
 
-            String branchKey;
-            try (PreparedStatement categoryStatement = connection.prepareStatement(itemCategorySql)) {
-                categoryStatement.setInt(1, itemId);
-                try (ResultSet rs = categoryStatement.executeQuery()) {
-                    if (!rs.next()) {
-                        throw new IllegalStateException("Item not found");
-                    }
-                    branchKey = rs.getString("branch_key");
-                }
-            }
+            EquipmentBranch branch = equipmentDao.findBranch(connection, itemId);
 
-            try (PreparedStatement issueStatement = connection.prepareStatement(insertIssuanceSql)) {
-                issueStatement.setInt(1, officerId);
-                issueStatement.setInt(2, itemId);
-                issueStatement.setDate(3, Date.valueOf(issuedDate));
-                issueStatement.executeUpdate();
+            try (PreparedStatement preparedStatement = connection.prepareStatement(insertSql)) {
+                preparedStatement.setInt(1, officerId);
+                preparedStatement.setInt(2, itemId);
+                preparedStatement.setDate(3, Date.valueOf(issuedDate));
+                preparedStatement.executeUpdate();
             }
             equipmentDao.updateStatus(connection, itemId, EquipmentStatus.ISSUED);
 
-            if ("WEAPON".equals(branchKey)) {
+            if (branch == EquipmentBranch.WEAPON) {
                 List<Integer> attachmentIds = equipmentDao.findAttachmentIds(connection, itemId);
                 for (int attachmentId : attachmentIds) {
-                    try (PreparedStatement issueAttachmentStatement = connection.prepareStatement(insertIssuanceSql)) {
-                        issueAttachmentStatement.setInt(1, officerId);
-                        issueAttachmentStatement.setInt(2, attachmentId);
-                        issueAttachmentStatement.setDate(3, Date.valueOf(issuedDate));
-                        issueAttachmentStatement.executeUpdate();
+                    try (PreparedStatement preparedStatement = connection.prepareStatement(insertSql)) {
+                        preparedStatement.setInt(1, officerId);
+                        preparedStatement.setInt(2, attachmentId);
+                        preparedStatement.setDate(3, Date.valueOf(issuedDate));
+                        preparedStatement.executeUpdate();
                     }
                     equipmentDao.updateStatus(connection, attachmentId, EquipmentStatus.ISSUED);
                 }
@@ -131,27 +92,16 @@ public class IssuanceDao {
     public void returnItemAndAttachments(int issuanceId) {
         String issuanceSql = "SELECT item_id FROM issuances WHERE issuance_id = ?";
         String closeIssuanceSql = "UPDATE issuances SET returned_date = CURDATE() WHERE issuance_id = ?";
-        String closeByItemSql = """
-                UPDATE issuances
-                SET returned_date = CURDATE()
-                WHERE item_id = ? AND returned_date IS NULL
-                """;
-        String itemCategorySql = CATEGORY_CTE + """
-            SELECT ct.branch_key
-            FROM equipment_items e
-            JOIN category_tree ct ON ct.category_id = e.category_id
-            WHERE e.item_id = ?
-            """;
-
+        String closeByItemSql = "UPDATE issuances SET returned_date = CURDATE() WHERE item_id = ? AND returned_date IS NULL";
         EquipmentDao equipmentDao = new EquipmentDao();
 
         try (Connection connection = DatabaseManager.getConnection()) {
             connection.setAutoCommit(false);
 
             int itemId;
-            try (PreparedStatement issuanceStatement = connection.prepareStatement(issuanceSql)) {
-                issuanceStatement.setInt(1, issuanceId);
-                try (ResultSet rs = issuanceStatement.executeQuery()) {
+            try (PreparedStatement preparedStatement = connection.prepareStatement(issuanceSql)) {
+                preparedStatement.setInt(1, issuanceId);
+                try (ResultSet rs = preparedStatement.executeQuery()) {
                     if (!rs.next()) {
                         throw new IllegalStateException("Issuance not found");
                     }
@@ -159,30 +109,19 @@ public class IssuanceDao {
                 }
             }
 
-            try (PreparedStatement closeStatement = connection.prepareStatement(closeIssuanceSql)) {
-                closeStatement.setInt(1, issuanceId);
-                closeStatement.executeUpdate();
+            try (PreparedStatement preparedStatement = connection.prepareStatement(closeIssuanceSql)) {
+                preparedStatement.setInt(1, issuanceId);
+                preparedStatement.executeUpdate();
             }
-
             equipmentDao.updateStatus(connection, itemId, EquipmentStatus.AVAILABLE);
 
-            String branchKey;
-            try (PreparedStatement categoryStatement = connection.prepareStatement(itemCategorySql)) {
-                categoryStatement.setInt(1, itemId);
-                try (ResultSet rs = categoryStatement.executeQuery()) {
-                    if (!rs.next()) {
-                        throw new IllegalStateException("Item not found");
-                    }
-                    branchKey = rs.getString("branch_key");
-                }
-            }
-
-            if ("WEAPON".equals(branchKey)) {
+            EquipmentBranch branch = equipmentDao.findBranch(connection, itemId);
+            if (branch == EquipmentBranch.WEAPON) {
                 List<Integer> attachmentIds = equipmentDao.findAttachmentIds(connection, itemId);
-                try (PreparedStatement closeAttachmentStatement = connection.prepareStatement(closeByItemSql)) {
+                try (PreparedStatement preparedStatement = connection.prepareStatement(closeByItemSql)) {
                     for (int attachmentId : attachmentIds) {
-                        closeAttachmentStatement.setInt(1, attachmentId);
-                        closeAttachmentStatement.executeUpdate();
+                        preparedStatement.setInt(1, attachmentId);
+                        preparedStatement.executeUpdate();
                         equipmentDao.updateStatus(connection, attachmentId, EquipmentStatus.AVAILABLE);
                     }
                 }
@@ -195,21 +134,25 @@ public class IssuanceDao {
     }
 
     public List<IssuedItemRow> findActiveIssuedItemsByOfficer(int officerId) {
-         String sql = CATEGORY_CTE + """
+        String sql = """
                 SELECT i.issuance_id,
+                       e.item_id,
                        e.name AS item_name,
                        e.serial_number,
+                       e.branch,
+                       e.is_attachment,
+                       et.name AS equipment_type_name,
+                       wt.name AS weapon_type_name,
+                       ca.name AS caliber_name,
+                       sz.name AS size_name,
                        i.issued_date,
-                  w.name AS attached_to_weapon,
-                  ct.category_id,
-                  ct.name AS category_name,
-                  ct.parent_category_id,
-                  ct.system_key,
-                  ct.branch_key,
-                  ct.category_path
+                       w.name AS attached_to_weapon
                 FROM issuances i
                 JOIN equipment_items e ON e.item_id = i.item_id
-              JOIN category_tree ct ON ct.category_id = e.category_id
+                LEFT JOIN equipment_types   et ON et.id = e.equipment_type_id
+                LEFT JOIN weapon_types      wt ON wt.id = e.weapon_type_id
+                LEFT JOIN calibers          ca ON ca.id = e.caliber_id
+                LEFT JOIN uniform_sizes     sz ON sz.id = e.size_id
                 LEFT JOIN weapon_attachments wa ON wa.attachment_item_id = e.item_id
                 LEFT JOIN equipment_items w ON w.item_id = wa.weapon_item_id
                 WHERE i.officer_id = ? AND i.returned_date IS NULL
@@ -217,33 +160,64 @@ public class IssuanceDao {
                 """;
 
         List<IssuedItemRow> rows = new ArrayList<>();
-
         try (Connection connection = DatabaseManager.getConnection();
              PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
             preparedStatement.setInt(1, officerId);
-
             try (ResultSet rs = preparedStatement.executeQuery()) {
                 while (rs.next()) {
+                    EquipmentBranch branch = EquipmentBranch.fromName(rs.getString("branch"));
+                    String summary = buildSummary(branch,
+                            rs.getString("equipment_type_name"),
+                            rs.getString("weapon_type_name"),
+                            rs.getString("caliber_name"),
+                            rs.getString("size_name"),
+                            rs.getBoolean("is_attachment"));
                     rows.add(new IssuedItemRow(
                             rs.getInt("issuance_id"),
                             rs.getString("item_name"),
-                            new EquipmentCategory(
-                                rs.getInt("category_id"),
-                                rs.getString("category_name"),
-                                (Integer) rs.getObject("parent_category_id"),
-                                rs.getString("system_key"),
-                                rs.getString("branch_key"),
-                                rs.getString("category_path")
-                            ),
+                            branch,
+                            summary,
                             rs.getString("serial_number"),
                             rs.getDate("issued_date").toLocalDate(),
                             rs.getString("attached_to_weapon")
                     ));
                 }
             }
+            return rows;
         } catch (SQLException ex) {
             throw new IllegalStateException("Failed to load issued items", ex);
         }
-        return rows;
+    }
+
+    private static String buildSummary(EquipmentBranch branch, String typeName, String weaponType,
+                                       String caliber, String size, boolean attachment) {
+        StringBuilder builder = new StringBuilder();
+        switch (branch) {
+            case WEAPON -> {
+                if (weaponType != null) builder.append(weaponType);
+                if (caliber != null) {
+                    if (builder.length() > 0) builder.append(" \u00b7 ");
+                    builder.append(caliber);
+                }
+            }
+            case UNIFORM -> {
+                if (typeName != null) builder.append(typeName);
+                if (size != null) {
+                    if (builder.length() > 0) builder.append(" \u00b7 ");
+                    builder.append("Size ").append(size);
+                }
+            }
+            case EQUIPMENT -> {
+                if (typeName != null) builder.append(typeName);
+                if (attachment) {
+                    if (builder.length() > 0) builder.append(" \u00b7 ");
+                    builder.append("Attachment");
+                }
+            }
+        }
+        if (builder.length() == 0) {
+            builder.append(branch.getDisplayName());
+        }
+        return builder.toString();
     }
 }

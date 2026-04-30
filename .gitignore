@@ -2,5 +2,6 @@ target/
 .idea/
 .vscode/
 *.iml
+evidnceharborjava
 
 src/main/resources/com/quartermaster/config.properties

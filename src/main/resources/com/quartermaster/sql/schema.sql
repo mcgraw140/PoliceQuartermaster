@@ -1,3 +1,11 @@
+-- =============================================================
+-- Police Quartermaster schema (lookup-driven)
+-- Categorization comes from per-domain lookup tables.
+-- Script is idempotent: safe to run on a fresh DB or an upgrade.
+-- =============================================================
+
+-- ---- Personnel & access -------------------------------------------------
+
 CREATE TABLE IF NOT EXISTS officers (
     officer_id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
@@ -15,116 +23,73 @@ CREATE TABLE IF NOT EXISTS users (
         ON DELETE SET NULL ON UPDATE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS equipment_categories (
-        category_id INT AUTO_INCREMENT PRIMARY KEY,
-        name VARCHAR(100) NOT NULL,
-        parent_category_id INT NULL,
-        system_key VARCHAR(50) NULL UNIQUE,
-        CONSTRAINT fk_category_parent FOREIGN KEY (parent_category_id) REFERENCES equipment_categories(category_id)
-                ON DELETE CASCADE ON UPDATE CASCADE
+-- ---- Lookup tables (single-column reference data) -----------------------
+
+CREATE TABLE IF NOT EXISTS equipment_types (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE
 );
+
+CREATE TABLE IF NOT EXISTS weapon_types (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE
+);
+
+CREATE TABLE IF NOT EXISTS calibers (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(50) NOT NULL UNIQUE
+);
+
+CREATE TABLE IF NOT EXISTS uniform_sizes (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(50) NOT NULL UNIQUE
+);
+
+CREATE TABLE IF NOT EXISTS vehicle_types (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE
+);
+
+CREATE TABLE IF NOT EXISTS storage_locations (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE
+);
+
+-- ---- Equipment ----------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS equipment_items (
     item_id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
-        category VARCHAR(50) NULL,
-        category_id INT NULL,
+    branch ENUM('WEAPON','EQUIPMENT','UNIFORM') NOT NULL DEFAULT 'EQUIPMENT',
+    equipment_type_id INT NULL,
+    weapon_type_id INT NULL,
+    caliber_id INT NULL,
+    size_id INT NULL,
+    storage_location_id INT NULL,
     serial_number VARCHAR(100) UNIQUE NULL,
-    `condition` ENUM('NEW', 'GOOD', 'FAIR', 'POOR') NOT NULL DEFAULT 'GOOD',
-    status ENUM('AVAILABLE', 'ISSUED', 'MAINTENANCE', 'RETIRED') NOT NULL DEFAULT 'AVAILABLE'
+    `condition` ENUM('NEW','GOOD','FAIR','POOR') NOT NULL DEFAULT 'GOOD',
+    status ENUM('AVAILABLE','ISSUED','MAINTENANCE','RETIRED') NOT NULL DEFAULT 'AVAILABLE',
+    is_attachment TINYINT(1) NOT NULL DEFAULT 0,
+    CONSTRAINT fk_eq_type    FOREIGN KEY (equipment_type_id) REFERENCES equipment_types(id) ON DELETE SET NULL,
+    CONSTRAINT fk_eq_weapon  FOREIGN KEY (weapon_type_id) REFERENCES weapon_types(id) ON DELETE SET NULL,
+    CONSTRAINT fk_eq_caliber FOREIGN KEY (caliber_id) REFERENCES calibers(id) ON DELETE SET NULL,
+    CONSTRAINT fk_eq_size    FOREIGN KEY (size_id) REFERENCES uniform_sizes(id) ON DELETE SET NULL,
+    CONSTRAINT fk_eq_storage FOREIGN KEY (storage_location_id) REFERENCES storage_locations(id) ON DELETE SET NULL
 );
 
-ALTER TABLE equipment_items ADD COLUMN IF NOT EXISTS category_id INT NULL;
+-- Legacy column cleanup: tolerated as no-op on a fresh DB
+ALTER TABLE equipment_items DROP COLUMN IF EXISTS category;
+ALTER TABLE equipment_items DROP COLUMN IF EXISTS category_id;
+DROP TABLE IF EXISTS equipment_categories;
 
-ALTER TABLE equipment_items MODIFY category VARCHAR(50) NULL;
-
-INSERT INTO equipment_categories (name, parent_category_id, system_key)
-SELECT 'Weapons', NULL, 'WEAPON'
-WHERE NOT EXISTS (SELECT 1 FROM equipment_categories WHERE system_key = 'WEAPON');
-
-INSERT INTO equipment_categories (name, parent_category_id, system_key)
-SELECT 'Equipment', NULL, 'EQUIPMENT'
-WHERE NOT EXISTS (SELECT 1 FROM equipment_categories WHERE system_key = 'EQUIPMENT');
-
-INSERT INTO equipment_categories (name, parent_category_id, system_key)
-SELECT 'Uniforms', NULL, 'UNIFORM'
-WHERE NOT EXISTS (SELECT 1 FROM equipment_categories WHERE system_key = 'UNIFORM');
-
-INSERT INTO equipment_categories (name, parent_category_id, system_key)
-SELECT 'Weapon Attachments', root.category_id, 'ATTACHMENT'
-FROM equipment_categories root
-WHERE root.system_key = 'WEAPON'
-    AND NOT EXISTS (SELECT 1 FROM equipment_categories WHERE system_key = 'ATTACHMENT');
-
-INSERT INTO equipment_categories (name, parent_category_id, system_key)
-SELECT 'Duty Belt', root.category_id, NULL
-FROM equipment_categories root
-WHERE root.system_key = 'EQUIPMENT'
-    AND NOT EXISTS (
-            SELECT 1 FROM equipment_categories c
-            WHERE c.name = 'Duty Belt' AND c.parent_category_id = root.category_id
-    );
-
-INSERT INTO equipment_categories (name, parent_category_id, system_key)
-SELECT 'Vest', root.category_id, NULL
-FROM equipment_categories root
-WHERE root.system_key = 'EQUIPMENT'
-    AND NOT EXISTS (
-            SELECT 1 FROM equipment_categories c
-            WHERE c.name = 'Vest' AND c.parent_category_id = root.category_id
-    );
-
-INSERT INTO equipment_categories (name, parent_category_id, system_key)
-SELECT 'Electronics', root.category_id, NULL
-FROM equipment_categories root
-WHERE root.system_key = 'EQUIPMENT'
-    AND NOT EXISTS (
-            SELECT 1 FROM equipment_categories c
-            WHERE c.name = 'Electronics' AND c.parent_category_id = root.category_id
-    );
-
-INSERT INTO equipment_categories (name, parent_category_id, system_key)
-SELECT 'Radio', electronics.category_id, NULL
-FROM equipment_categories electronics
-WHERE electronics.name = 'Electronics'
-    AND NOT EXISTS (
-            SELECT 1 FROM equipment_categories c
-            WHERE c.name = 'Radio' AND c.parent_category_id = electronics.category_id
-    );
-
-INSERT INTO equipment_categories (name, parent_category_id, system_key)
-SELECT 'Cell Phone', electronics.category_id, NULL
-FROM equipment_categories electronics
-WHERE electronics.name = 'Electronics'
-    AND NOT EXISTS (
-            SELECT 1 FROM equipment_categories c
-            WHERE c.name = 'Cell Phone' AND c.parent_category_id = electronics.category_id
-    );
-
-INSERT INTO equipment_categories (name, parent_category_id, system_key)
-SELECT 'Shirts', uniforms.category_id, NULL
-FROM equipment_categories uniforms
-WHERE uniforms.system_key = 'UNIFORM'
-    AND NOT EXISTS (
-            SELECT 1 FROM equipment_categories c
-            WHERE c.name = 'Shirts' AND c.parent_category_id = uniforms.category_id
-    );
-
-UPDATE equipment_items ei
-JOIN equipment_categories ec ON ec.system_key = CASE
-        WHEN ei.category = 'WEAPON' THEN 'WEAPON'
-        WHEN ei.category = 'ATTACHMENT' THEN 'ATTACHMENT'
-        WHEN ei.category = 'UNIFORM' THEN 'UNIFORM'
-        ELSE 'EQUIPMENT'
-END
-SET ei.category_id = ec.category_id
-WHERE ei.category_id IS NULL;
-
-UPDATE equipment_items ei
-JOIN equipment_categories ec ON ec.system_key = 'EQUIPMENT'
-SET ei.category_id = ec.category_id
-WHERE ei.category_id IS NULL;
-
+-- Forward-compatible columns when an older equipment_items table exists
+ALTER TABLE equipment_items ADD COLUMN IF NOT EXISTS branch ENUM('WEAPON','EQUIPMENT','UNIFORM') NOT NULL DEFAULT 'EQUIPMENT';
+ALTER TABLE equipment_items ADD COLUMN IF NOT EXISTS equipment_type_id INT NULL;
+ALTER TABLE equipment_items ADD COLUMN IF NOT EXISTS weapon_type_id INT NULL;
+ALTER TABLE equipment_items ADD COLUMN IF NOT EXISTS caliber_id INT NULL;
+ALTER TABLE equipment_items ADD COLUMN IF NOT EXISTS size_id INT NULL;
+ALTER TABLE equipment_items ADD COLUMN IF NOT EXISTS storage_location_id INT NULL;
+ALTER TABLE equipment_items ADD COLUMN IF NOT EXISTS is_attachment TINYINT(1) NOT NULL DEFAULT 0;
 
 CREATE TABLE IF NOT EXISTS weapon_attachments (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -148,6 +113,8 @@ CREATE TABLE IF NOT EXISTS issuances (
         ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
+-- ---- Fleet --------------------------------------------------------------
+
 CREATE TABLE IF NOT EXISTS vehicles (
     vehicle_id INT AUTO_INCREMENT PRIMARY KEY,
     unit_number VARCHAR(20) NOT NULL UNIQUE,
@@ -155,16 +122,128 @@ CREATE TABLE IF NOT EXISTS vehicles (
     model VARCHAR(50) NOT NULL,
     year INT NOT NULL,
     vin VARCHAR(17) UNIQUE NULL,
-    plate_number VARCHAR(20) NULL
+    plate_number VARCHAR(20) NULL,
+    vehicle_type_id INT NULL,
+    CONSTRAINT fk_veh_type FOREIGN KEY (vehicle_type_id) REFERENCES vehicle_types(id) ON DELETE SET NULL
 );
+
+ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS vehicle_type_id INT NULL;
 
 CREATE TABLE IF NOT EXISTS vehicle_maintenance_logs (
     log_id INT AUTO_INCREMENT PRIMARY KEY,
     vehicle_id INT NOT NULL,
     log_date DATE NOT NULL,
     mileage INT NULL,
+    cost DECIMAL(10,2) NULL,
     description TEXT NOT NULL,
     performed_by VARCHAR(100) NULL,
     CONSTRAINT fk_maintenance_vehicle FOREIGN KEY (vehicle_id) REFERENCES vehicles(vehicle_id)
         ON DELETE CASCADE ON UPDATE CASCADE
 );
+
+ALTER TABLE vehicle_maintenance_logs ADD COLUMN IF NOT EXISTS cost DECIMAL(10,2) NULL;
+
+-- ---- Seed lookup defaults ----------------------------------------------
+
+INSERT IGNORE INTO equipment_types(name) VALUES
+    ('Body Armor'),('Duty Belt'),('Radio'),('Cell Phone'),('Body Camera'),
+    ('Flashlight'),('Taser'),('Baton'),('Holster'),('Magazine'),('Optic'),
+    ('Light/Laser'),('Sling'),('Suppressor'),('Helmet'),('Medical Kit');
+
+INSERT IGNORE INTO weapon_types(name) VALUES
+    ('Handgun'),('Patrol Rifle'),('Shotgun'),('Submachine Gun'),
+    ('Less Lethal Launcher'),('Precision Rifle');
+
+INSERT IGNORE INTO calibers(name) VALUES
+    ('9mm'),('.40 S&W'),('.45 ACP'),('.380 ACP'),
+    ('5.56 NATO'),('.223 Rem'),('7.62 NATO'),('.308 Win'),
+    ('12 Gauge'),('.40mm');
+
+INSERT IGNORE INTO uniform_sizes(name) VALUES
+    ('XS'),('S'),('M'),('L'),('XL'),('2XL'),('3XL');
+
+INSERT IGNORE INTO vehicle_types(name) VALUES
+    ('Marked Patrol'),('Unmarked'),('K-9 Unit'),('SWAT/Tactical'),
+    ('Motorcycle'),('Supervisor'),('Transport Van'),('Detective');
+
+INSERT IGNORE INTO storage_locations(name) VALUES
+    ('Main Armory'),('Secondary Armory'),('Quartermaster Cage'),
+    ('Locker Room'),('Garage Bay'),('Evidence Room');
+
+-- ---- Seed sample inventory ---------------------------------------------
+
+INSERT IGNORE INTO equipment_items
+    (name, branch, equipment_type_id, weapon_type_id, caliber_id, size_id, storage_location_id,
+     serial_number, `condition`, status, is_attachment)
+VALUES
+    (
+        'Glock 17 Gen5 - Handgun - 9mm',
+        'WEAPON',
+        NULL,
+        (SELECT id FROM weapon_types WHERE name = 'Handgun' LIMIT 1),
+        (SELECT id FROM calibers WHERE name = '9mm' LIMIT 1),
+        NULL,
+        (SELECT id FROM storage_locations WHERE name = 'Main Armory' LIMIT 1),
+        'WPN-G17-0001',
+        'GOOD',
+        'AVAILABLE',
+        0
+    ),
+    (
+        'Glock 17 Gen5 - Handgun - 9mm',
+        'WEAPON',
+        NULL,
+        (SELECT id FROM weapon_types WHERE name = 'Handgun' LIMIT 1),
+        (SELECT id FROM calibers WHERE name = '9mm' LIMIT 1),
+        NULL,
+        (SELECT id FROM storage_locations WHERE name = 'Main Armory' LIMIT 1),
+        'WPN-G17-0002',
+        'GOOD',
+        'AVAILABLE',
+        0
+    ),
+    (
+        'Glock 17 Gen5 - Handgun - 9mm',
+        'WEAPON',
+        NULL,
+        (SELECT id FROM weapon_types WHERE name = 'Handgun' LIMIT 1),
+        (SELECT id FROM calibers WHERE name = '9mm' LIMIT 1),
+        NULL,
+        (SELECT id FROM storage_locations WHERE name = 'Main Armory' LIMIT 1),
+        'WPN-G17-0003',
+        'GOOD',
+        'AVAILABLE',
+        0
+    ),
+    (
+        'Motorola APX6000 - Radio',
+        'EQUIPMENT',
+        (SELECT id FROM equipment_types WHERE name = 'Radio' LIMIT 1),
+        NULL,
+        NULL,
+        NULL,
+        (SELECT id FROM storage_locations WHERE name = 'Quartermaster Cage' LIMIT 1),
+        'EQ-RAD-0101',
+        'GOOD',
+        'AVAILABLE',
+        0
+    ),
+    (
+        'Safariland RDS Optic - Optic',
+        'EQUIPMENT',
+        (SELECT id FROM equipment_types WHERE name = 'Optic' LIMIT 1),
+        NULL,
+        NULL,
+        NULL,
+        (SELECT id FROM storage_locations WHERE name = 'Main Armory' LIMIT 1),
+        'ATT-OPT-0001',
+        'GOOD',
+        'AVAILABLE',
+        1
+    );
+
+INSERT IGNORE INTO weapon_attachments (weapon_item_id, attachment_item_id)
+SELECT w.item_id, a.item_id
+FROM equipment_items w
+JOIN equipment_items a ON a.serial_number = 'ATT-OPT-0001'
+WHERE w.serial_number = 'WPN-G17-0001';
