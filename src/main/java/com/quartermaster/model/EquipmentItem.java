@@ -17,6 +17,7 @@ public class EquipmentItem {
     private final String storageLocationName;
 
     private final String serialNumber;
+    private final Double replacementCost;
     private final EquipmentCondition condition;
     private final EquipmentStatus status;
     private final boolean attachment;
@@ -30,6 +31,7 @@ public class EquipmentItem {
                          Integer sizeId, String sizeName,
                          Integer storageLocationId, String storageLocationName,
                          String serialNumber,
+                         Double replacementCost,
                          EquipmentCondition condition,
                          EquipmentStatus status,
                          boolean attachment) {
@@ -47,6 +49,7 @@ public class EquipmentItem {
         this.storageLocationId = storageLocationId;
         this.storageLocationName = storageLocationName;
         this.serialNumber = serialNumber;
+        this.replacementCost = replacementCost;
         this.condition = condition;
         this.status = status;
         this.attachment = attachment;
@@ -66,6 +69,7 @@ public class EquipmentItem {
     public Integer getStorageLocationId() { return storageLocationId; }
     public String getStorageLocationName() { return storageLocationName; }
     public String getSerialNumber() { return serialNumber; }
+    public Double getReplacementCost() { return replacementCost; }
     public EquipmentCondition getCondition() { return condition; }
     public EquipmentStatus getStatus() { return status; }
     public boolean isAttachment() { return attachment; }

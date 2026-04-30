@@ -79,6 +79,38 @@ public class UserDao {
         }
     }
 
+    public void updateUser(int userId, String username, UserRole role, Integer officerId) {
+        String sql = "UPDATE users SET username = ?, role = ?, officer_id = ? WHERE user_id = ?";
+
+        try (Connection connection = DatabaseManager.getConnection();
+             PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
+            preparedStatement.setString(1, username);
+            preparedStatement.setString(2, role.name());
+            if (officerId == null) {
+                preparedStatement.setNull(3, java.sql.Types.INTEGER);
+            } else {
+                preparedStatement.setInt(3, officerId);
+            }
+            preparedStatement.setInt(4, userId);
+            preparedStatement.executeUpdate();
+        } catch (SQLException ex) {
+            throw new IllegalStateException("Failed to update user", ex);
+        }
+    }
+
+    public void updatePasswordHash(int userId, String passwordHash) {
+        String sql = "UPDATE users SET password_hash = ? WHERE user_id = ?";
+
+        try (Connection connection = DatabaseManager.getConnection();
+             PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
+            preparedStatement.setString(1, passwordHash);
+            preparedStatement.setInt(2, userId);
+            preparedStatement.executeUpdate();
+        } catch (SQLException ex) {
+            throw new IllegalStateException("Failed to update user password", ex);
+        }
+    }
+
     public void deleteUser(int userId) {
         String sql = "DELETE FROM users WHERE user_id = ?";
 

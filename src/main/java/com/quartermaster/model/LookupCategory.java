@@ -6,6 +6,7 @@ package com.quartermaster.model;
  */
 public enum LookupCategory {
     EQUIPMENT_TYPES("Equipment Types", "equipment_types"),
+    UNIFORM_ITEMS("Uniform Items", "uniform_items"),
     WEAPON_TYPES("Weapon Types", "weapon_types"),
     CALIBERS("Calibers", "calibers"),
     UNIFORM_SIZES("Uniform Sizes", "uniform_sizes"),

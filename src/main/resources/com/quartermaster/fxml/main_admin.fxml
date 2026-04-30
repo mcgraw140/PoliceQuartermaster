@@ -83,6 +83,7 @@
                                 <TableColumn fx:id="equipmentCategoryColumn"  text="Category" prefWidth="240"/>
                                 <TableColumn fx:id="equipmentLocationColumn"  text="Location" prefWidth="160"/>
                                 <TableColumn fx:id="equipmentSerialColumn"    text="Serial"   prefWidth="180"/>
+                                <TableColumn fx:id="equipmentCostColumn"      text="Cost"     prefWidth="110"/>
                                 <TableColumn fx:id="equipmentConditionColumn" text="Condition" prefWidth="110"/>
                                 <TableColumn fx:id="equipmentStatusColumn"    text="Status"   prefWidth="120"/>
                             </columns>
@@ -103,12 +104,13 @@
                             <Label text="Date"/>
                             <DatePicker fx:id="issueDatePicker"/>
                             <Region prefWidth="20"/>
-                            <Button text="Issue Selected" onAction="#onIssueSelectedItem" styleClass="btn-primary"/>
+                            <Button text="Save &amp; Print" onAction="#onIssueSelectedItem" styleClass="btn-primary"/>
                         </FlowPane>
 
                         <HBox spacing="10" alignment="CENTER_LEFT">
                             <Label text="Search"/>
                             <TextField fx:id="issueSearchField" promptText="Search by name, category, or serial" prefWidth="360"/>
+                            <Label text="Select rows and use arrows to issue/return" styleClass="muted"/>
                         </HBox>
 
                         <HBox spacing="12" VBox.vgrow="ALWAYS">
@@ -123,15 +125,15 @@
                                 </TableView>
                             </VBox>
 
-                            <VBox spacing="8" alignment="CENTER">
+                            <VBox spacing="8" alignment="CENTER" prefWidth="130" minWidth="130">
                                 <Region VBox.vgrow="ALWAYS"/>
-                                <Button text=">>" onAction="#onAddIssueSelection" styleClass="btn-secondary"/>
-                                <Button text="<<" onAction="#onRemoveIssueSelection" styleClass="btn-secondary"/>
+                                <Button text="Issue -&gt;" onAction="#onAddIssueSelection" styleClass="btn-secondary" prefWidth="120"/>
+                                <Button text="&lt;- Return" onAction="#onRemoveIssueSelection" styleClass="btn-secondary" prefWidth="120"/>
                                 <Region VBox.vgrow="ALWAYS"/>
                             </VBox>
 
                             <VBox spacing="8" HBox.hgrow="ALWAYS">
-                                <Label text="Selected To Issue" styleClass="muted"/>
+                                <Label text="Issued To Officer" styleClass="muted"/>
                                 <TableView fx:id="issueSelectedTable" prefHeight="240" styleClass="app-table" HBox.hgrow="ALWAYS" VBox.vgrow="ALWAYS">
                                     <columns>
                                         <TableColumn fx:id="issueSelectedNameColumn" text="Name" prefWidth="240"/>
@@ -141,22 +143,6 @@
                                 </TableView>
                             </VBox>
                         </HBox>
-                    </VBox>
-
-                    <VBox styleClass="card" spacing="10" VBox.vgrow="ALWAYS">
-                        <HBox alignment="CENTER_LEFT" spacing="10">
-                            <Label text="Active And Past Issuances" styleClass="section-title"/>
-                            <Region HBox.hgrow="ALWAYS"/>
-                            <Button text="Return Selected" onAction="#onReturnSelectedItem" styleClass="btn-secondary"/>
-                        </HBox>
-                        <TableView fx:id="issuanceTable" VBox.vgrow="ALWAYS" styleClass="app-table">
-                            <columns>
-                                <TableColumn fx:id="issuanceOfficerColumn" text="Officer"       prefWidth="240"/>
-                                <TableColumn fx:id="issuanceItemColumn"    text="Item"          prefWidth="320"/>
-                                <TableColumn fx:id="issuanceDateColumn"    text="Issued Date"   prefWidth="140"/>
-                                <TableColumn fx:id="returnDateColumn"      text="Returned Date" prefWidth="140"/>
-                            </columns>
-                        </TableView>
                     </VBox>
                 </VBox>
 
@@ -191,6 +177,7 @@
                             <Label text="Vehicle"/>
                             <ComboBox fx:id="maintenanceVehicleCombo" prefWidth="280" onAction="#onMaintenanceVehicleChanged"/>
                             <Button text="Add Log" onAction="#onAddMaintenanceLog" styleClass="btn-secondary"/>
+                            <Button text="Delete Log" onAction="#onDeleteMaintenanceLog" styleClass="btn-danger"/>
                         </FlowPane>
                         <TableView fx:id="maintenanceTable" prefHeight="220" styleClass="app-table">
                             <columns>
@@ -233,6 +220,7 @@
                                 <Label text="Login Personnel" styleClass="section-title"/>
                                 <Region HBox.hgrow="ALWAYS"/>
                                 <Button text="Add"    onAction="#onAddLoginPersonnel"    styleClass="btn-primary"/>
+                                <Button text="Edit"   onAction="#onEditLoginPersonnel"   styleClass="btn-secondary"/>
                                 <Button text="Delete" onAction="#onDeleteLoginPersonnel" styleClass="btn-danger"/>
                             </HBox>
                             <TableView fx:id="usersTable" prefHeight="220" styleClass="app-table">
@@ -272,7 +260,38 @@
                     <VBox fx:id="adminSettingsPane" spacing="10" visible="false" managed="false" VBox.vgrow="ALWAYS">
                         <VBox styleClass="card" spacing="10">
                             <Label text="Settings" styleClass="section-title"/>
-                            <Label text="System-level options can be added here (defaults, policy toggles, print preferences)." wrapText="true"/>
+                            <Label text="System-level options for print headers and defaults." wrapText="true"/>
+                            <HBox spacing="8" alignment="CENTER_LEFT">
+                                <Label text="Agency Name"/>
+                                <TextField fx:id="agencyNameField" promptText="Agency name" HBox.hgrow="ALWAYS"/>
+                                <Button text="Save Settings" onAction="#onSaveSettings" styleClass="btn-primary"/>
+                            </HBox>
+                        </VBox>
+                    </VBox>
+
+                    <VBox fx:id="adminHistoryPane" spacing="10" visible="false" managed="false" VBox.vgrow="ALWAYS">
+                        <VBox styleClass="card" spacing="10" VBox.vgrow="ALWAYS">
+                            <HBox alignment="CENTER_LEFT" spacing="10">
+                                <Label text="Issue History" styleClass="section-title"/>
+                                <Region HBox.hgrow="ALWAYS"/>
+                                <Button text="Return Selected" onAction="#onReturnSelectedItem" styleClass="btn-secondary"/>
+                            </HBox>
+                            <TableView fx:id="issuanceTable" VBox.vgrow="ALWAYS" styleClass="app-table">
+                                <columns>
+                                    <TableColumn fx:id="issuanceOfficerColumn"    text="Issued To"      prefWidth="160"/>
+                                    <TableColumn fx:id="issuanceItemColumn"       text="Item"           prefWidth="220"/>
+                                    <TableColumn fx:id="issuanceBranchColumn"     text="Branch"         prefWidth="120"/>
+                                    <TableColumn fx:id="issuanceCategoryColumn"   text="Category"       prefWidth="190"/>
+                                    <TableColumn fx:id="issuanceSerialColumn"     text="Serial"         prefWidth="150"/>
+                                    <TableColumn fx:id="issuanceStatusColumn"     text="Status"         prefWidth="120"/>
+                                    <TableColumn fx:id="issuanceConditionColumn"  text="Condition"      prefWidth="110"/>
+                                    <TableColumn fx:id="issuanceCostColumn"       text="Cost"           prefWidth="100"/>
+                                    <TableColumn fx:id="issuanceByColumn"         text="Issued By"      prefWidth="120"/>
+                                    <TableColumn fx:id="issuanceDateColumn"       text="Issued Date"    prefWidth="120"/>
+                                    <TableColumn fx:id="returnByColumn"           text="Returned By"    prefWidth="120"/>
+                                    <TableColumn fx:id="returnDateColumn"         text="Returned Date"  prefWidth="120"/>
+                                </columns>
+                            </TableView>
                         </VBox>
                     </VBox>
                 </VBox>

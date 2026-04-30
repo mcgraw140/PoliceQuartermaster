@@ -31,6 +31,7 @@ public class EquipmentDao {
                    e.storage_location_id,
                    sl.name AS storage_location_name,
                    e.serial_number,
+                   e.replacement_cost,
                    e.`condition`,
                    e.status,
                    e.is_attachment
@@ -89,8 +90,8 @@ public class EquipmentDao {
         String sql = """
                 INSERT INTO equipment_items
                     (name, branch, equipment_type_id, weapon_type_id, caliber_id,
-                     size_id, storage_location_id, serial_number, `condition`, status, is_attachment)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     size_id, storage_location_id, serial_number, replacement_cost, `condition`, status, is_attachment)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """;
         try (Connection connection = DatabaseManager.getConnection();
              PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
@@ -105,13 +106,13 @@ public class EquipmentDao {
         String sql = """
                 UPDATE equipment_items
                 SET name = ?, branch = ?, equipment_type_id = ?, weapon_type_id = ?, caliber_id = ?,
-                    size_id = ?, storage_location_id = ?, serial_number = ?, `condition` = ?, status = ?, is_attachment = ?
+                    size_id = ?, storage_location_id = ?, serial_number = ?, replacement_cost = ?, `condition` = ?, status = ?, is_attachment = ?
                 WHERE item_id = ?
                 """;
         try (Connection connection = DatabaseManager.getConnection();
              PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
             bindMutable(preparedStatement, item);
-            preparedStatement.setInt(12, item.getItemId());
+            preparedStatement.setInt(13, item.getItemId());
             preparedStatement.executeUpdate();
         } catch (SQLException ex) {
             throw new IllegalStateException("Failed to update equipment", ex);
@@ -125,6 +126,19 @@ public class EquipmentDao {
             preparedStatement.executeUpdate();
         } catch (SQLException ex) {
             throw new IllegalStateException("Failed to delete equipment", ex);
+        }
+    }
+
+    public boolean hasIssuanceHistory(int itemId) {
+        String sql = "SELECT 1 FROM issuances WHERE item_id = ? LIMIT 1";
+        try (Connection connection = DatabaseManager.getConnection();
+             PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
+            preparedStatement.setInt(1, itemId);
+            try (ResultSet rs = preparedStatement.executeQuery()) {
+                return rs.next();
+            }
+        } catch (SQLException ex) {
+            throw new IllegalStateException("Failed to check issuance history", ex);
         }
     }
 
@@ -235,9 +249,14 @@ public class EquipmentDao {
         } else {
             ps.setString(8, item.getSerialNumber());
         }
-        ps.setString(9, item.getCondition().name());
-        ps.setString(10, item.getStatus().name());
-        ps.setInt(11, item.isAttachment() ? 1 : 0);
+        if (item.getReplacementCost() == null) {
+            ps.setNull(9, Types.DECIMAL);
+        } else {
+            ps.setDouble(9, item.getReplacementCost());
+        }
+        ps.setString(10, item.getCondition().name());
+        ps.setString(11, item.getStatus().name());
+        ps.setInt(12, item.isAttachment() ? 1 : 0);
     }
 
     private static void setNullableInt(PreparedStatement ps, int index, Integer value) throws SQLException {
@@ -264,9 +283,15 @@ public class EquipmentDao {
                 (Integer) rs.getObject("storage_location_id"),
                 rs.getString("storage_location_name"),
                 rs.getString("serial_number"),
+                nullableDouble(rs, "replacement_cost"),
                 EquipmentCondition.valueOf(rs.getString("condition")),
                 EquipmentStatus.valueOf(rs.getString("status")),
                 rs.getBoolean("is_attachment")
         );
+    }
+
+    private static Double nullableDouble(ResultSet rs, String column) throws SQLException {
+        Number value = (Number) rs.getObject(column);
+        return value == null ? null : value.doubleValue();
     }
 }

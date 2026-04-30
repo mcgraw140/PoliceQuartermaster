@@ -23,6 +23,11 @@ CREATE TABLE IF NOT EXISTS users (
         ON DELETE SET NULL ON UPDATE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS app_settings (
+    setting_key VARCHAR(100) PRIMARY KEY,
+    setting_value VARCHAR(255) NOT NULL
+);
+
 -- ---- Lookup tables (single-column reference data) -----------------------
 
 CREATE TABLE IF NOT EXISTS equipment_types (
@@ -43,6 +48,11 @@ CREATE TABLE IF NOT EXISTS calibers (
 CREATE TABLE IF NOT EXISTS uniform_sizes (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(50) NOT NULL UNIQUE
+);
+
+CREATE TABLE IF NOT EXISTS uniform_items (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE
 );
 
 CREATE TABLE IF NOT EXISTS vehicle_types (
@@ -67,6 +77,7 @@ CREATE TABLE IF NOT EXISTS equipment_items (
     size_id INT NULL,
     storage_location_id INT NULL,
     serial_number VARCHAR(100) UNIQUE NULL,
+    replacement_cost DECIMAL(10,2) NULL,
     `condition` ENUM('NEW','GOOD','FAIR','POOR') NOT NULL DEFAULT 'GOOD',
     status ENUM('AVAILABLE','ISSUED','MAINTENANCE','RETIRED') NOT NULL DEFAULT 'AVAILABLE',
     is_attachment TINYINT(1) NOT NULL DEFAULT 0,
@@ -90,6 +101,7 @@ ALTER TABLE equipment_items ADD COLUMN IF NOT EXISTS caliber_id INT NULL;
 ALTER TABLE equipment_items ADD COLUMN IF NOT EXISTS size_id INT NULL;
 ALTER TABLE equipment_items ADD COLUMN IF NOT EXISTS storage_location_id INT NULL;
 ALTER TABLE equipment_items ADD COLUMN IF NOT EXISTS is_attachment TINYINT(1) NOT NULL DEFAULT 0;
+ALTER TABLE equipment_items ADD COLUMN IF NOT EXISTS replacement_cost DECIMAL(10,2) NULL;
 
 CREATE TABLE IF NOT EXISTS weapon_attachments (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -105,13 +117,22 @@ CREATE TABLE IF NOT EXISTS issuances (
     issuance_id INT AUTO_INCREMENT PRIMARY KEY,
     officer_id INT NOT NULL,
     item_id INT NOT NULL,
+    issued_by_user_id INT NULL,
     issued_date DATE NOT NULL,
+    returned_by_user_id INT NULL,
     returned_date DATE NULL,
     CONSTRAINT fk_issuance_officer FOREIGN KEY (officer_id) REFERENCES officers(officer_id)
         ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT fk_issuance_item FOREIGN KEY (item_id) REFERENCES equipment_items(item_id)
-        ON DELETE RESTRICT ON UPDATE CASCADE
+        ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT fk_issuance_issued_by FOREIGN KEY (issued_by_user_id) REFERENCES users(user_id)
+        ON DELETE SET NULL ON UPDATE CASCADE,
+    CONSTRAINT fk_issuance_returned_by FOREIGN KEY (returned_by_user_id) REFERENCES users(user_id)
+        ON DELETE SET NULL ON UPDATE CASCADE
 );
+
+ALTER TABLE issuances ADD COLUMN IF NOT EXISTS issued_by_user_id INT NULL;
+ALTER TABLE issuances ADD COLUMN IF NOT EXISTS returned_by_user_id INT NULL;
 
 -- ---- Fleet --------------------------------------------------------------
 
@@ -162,6 +183,9 @@ INSERT IGNORE INTO calibers(name) VALUES
 INSERT IGNORE INTO uniform_sizes(name) VALUES
     ('XS'),('S'),('M'),('L'),('XL'),('2XL'),('3XL');
 
+INSERT IGNORE INTO uniform_items(name) VALUES
+    ('Pants'),('Shirt'),('Boots'),('Shoes'),('Hat/Cap'),('Jacket'),('Rainjacket');
+
 INSERT IGNORE INTO vehicle_types(name) VALUES
     ('Marked Patrol'),('Unmarked'),('K-9 Unit'),('SWAT/Tactical'),
     ('Motorcycle'),('Supervisor'),('Transport Van'),('Detective');
@@ -169,6 +193,9 @@ INSERT IGNORE INTO vehicle_types(name) VALUES
 INSERT IGNORE INTO storage_locations(name) VALUES
     ('Main Armory'),('Secondary Armory'),('Quartermaster Cage'),
     ('Locker Room'),('Garage Bay'),('Evidence Room');
+
+INSERT IGNORE INTO app_settings(setting_key, setting_value)
+VALUES ('agency_name', 'Police Quartermaster');
 
 -- ---- Seed sample inventory ---------------------------------------------
 

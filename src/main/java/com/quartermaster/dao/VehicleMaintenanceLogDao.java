@@ -28,12 +28,14 @@ public class VehicleMaintenanceLogDao {
             preparedStatement.setInt(1, vehicleId);
             try (ResultSet rs = preparedStatement.executeQuery()) {
                 while (rs.next()) {
+                    Number mileageNumber = (Number) rs.getObject("mileage");
+                    Number costNumber = (Number) rs.getObject("cost");
                     logs.add(new VehicleMaintenanceLog(
                             rs.getInt("log_id"),
                             rs.getInt("vehicle_id"),
                             rs.getDate("log_date").toLocalDate(),
-                            (Integer) rs.getObject("mileage"),
-                            (Double) rs.getObject("cost"),
+                        mileageNumber == null ? null : mileageNumber.intValue(),
+                        costNumber == null ? null : costNumber.doubleValue(),
                             rs.getString("description"),
                             rs.getString("performed_by")
                     ));
@@ -71,6 +73,34 @@ public class VehicleMaintenanceLogDao {
             preparedStatement.executeUpdate();
         } catch (SQLException ex) {
             throw new IllegalStateException("Failed to add maintenance log", ex);
+        }
+    }
+
+    public double findTotalCostByVehicle(int vehicleId) {
+        String sql = "SELECT COALESCE(SUM(cost), 0) AS total_cost FROM vehicle_maintenance_logs WHERE vehicle_id = ?";
+        try (Connection connection = DatabaseManager.getConnection();
+             PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
+            preparedStatement.setInt(1, vehicleId);
+            try (ResultSet rs = preparedStatement.executeQuery()) {
+                if (rs.next()) {
+                    Number value = (Number) rs.getObject("total_cost");
+                    return value == null ? 0.0 : value.doubleValue();
+                }
+                return 0.0;
+            }
+        } catch (SQLException ex) {
+            throw new IllegalStateException("Failed to calculate maintenance total", ex);
+        }
+    }
+
+    public void delete(int logId) {
+        String sql = "DELETE FROM vehicle_maintenance_logs WHERE log_id = ?";
+        try (Connection connection = DatabaseManager.getConnection();
+             PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
+            preparedStatement.setInt(1, logId);
+            preparedStatement.executeUpdate();
+        } catch (SQLException ex) {
+            throw new IllegalStateException("Failed to delete maintenance log", ex);
         }
     }
 }

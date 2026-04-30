@@ -24,11 +24,30 @@ public class IssuanceDao {
                        o.name AS officer_name,
                        e.item_id,
                        e.name AS item_name,
+                       e.branch,
+                       e.serial_number,
+                       e.replacement_cost,
+                       e.`condition`,
+                       e.status,
+                       e.is_attachment,
+                       COALESCE(et.name, ui.name) AS equipment_type_name,
+                       wt.name AS weapon_type_name,
+                       ca.name AS caliber_name,
+                       sz.name AS size_name,
+                       issued_by.username AS issued_by_username,
+                       returned_by.username AS returned_by_username,
                        i.issued_date,
                        i.returned_date
                 FROM issuances i
                 JOIN officers o ON o.officer_id = i.officer_id
                 JOIN equipment_items e ON e.item_id = i.item_id
+                LEFT JOIN equipment_types et ON et.id = e.equipment_type_id
+                LEFT JOIN uniform_items ui ON ui.id = e.equipment_type_id
+                LEFT JOIN weapon_types wt ON wt.id = e.weapon_type_id
+                LEFT JOIN calibers ca ON ca.id = e.caliber_id
+                LEFT JOIN uniform_sizes sz ON sz.id = e.size_id
+                LEFT JOIN users issued_by ON issued_by.user_id = i.issued_by_user_id
+                LEFT JOIN users returned_by ON returned_by.user_id = i.returned_by_user_id
                 ORDER BY i.issued_date DESC, i.issuance_id DESC
                 """;
         List<IssuanceAdminRow> rows = new ArrayList<>();
@@ -36,16 +55,7 @@ public class IssuanceDao {
              PreparedStatement preparedStatement = connection.prepareStatement(sql);
              ResultSet rs = preparedStatement.executeQuery()) {
             while (rs.next()) {
-                Date returnedDate = rs.getDate("returned_date");
-                rows.add(new IssuanceAdminRow(
-                        rs.getInt("issuance_id"),
-                        rs.getInt("officer_id"),
-                        rs.getString("officer_name"),
-                        rs.getInt("item_id"),
-                        rs.getString("item_name"),
-                        rs.getDate("issued_date").toLocalDate(),
-                        returnedDate == null ? null : returnedDate.toLocalDate()
-                ));
+                rows.add(mapIssuanceAdminRow(rs));
             }
             return rows;
         } catch (SQLException ex) {
@@ -53,8 +63,58 @@ public class IssuanceDao {
         }
     }
 
-    public void issueItem(int officerId, int itemId, LocalDate issuedDate) {
-        String insertSql = "INSERT INTO issuances(officer_id, item_id, issued_date, returned_date) VALUES(?, ?, ?, NULL)";
+    public List<IssuanceAdminRow> findByItemId(int itemId) {
+        String sql = """
+                SELECT i.issuance_id,
+                       o.officer_id,
+                       o.name AS officer_name,
+                       e.item_id,
+                       e.name AS item_name,
+                  e.branch,
+                  e.serial_number,
+                  e.replacement_cost,
+                  e.`condition`,
+                  e.status,
+                  e.is_attachment,
+                  COALESCE(et.name, ui.name) AS equipment_type_name,
+                  wt.name AS weapon_type_name,
+                  ca.name AS caliber_name,
+                  sz.name AS size_name,
+                       issued_by.username AS issued_by_username,
+                       returned_by.username AS returned_by_username,
+                       i.issued_date,
+                       i.returned_date
+                FROM issuances i
+                JOIN officers o ON o.officer_id = i.officer_id
+                JOIN equipment_items e ON e.item_id = i.item_id
+              LEFT JOIN equipment_types et ON et.id = e.equipment_type_id
+              LEFT JOIN uniform_items ui ON ui.id = e.equipment_type_id
+              LEFT JOIN weapon_types wt ON wt.id = e.weapon_type_id
+              LEFT JOIN calibers ca ON ca.id = e.caliber_id
+              LEFT JOIN uniform_sizes sz ON sz.id = e.size_id
+                LEFT JOIN users issued_by ON issued_by.user_id = i.issued_by_user_id
+                LEFT JOIN users returned_by ON returned_by.user_id = i.returned_by_user_id
+                WHERE i.item_id = ?
+                ORDER BY i.issued_date DESC, i.issuance_id DESC
+                """;
+
+        List<IssuanceAdminRow> rows = new ArrayList<>();
+        try (Connection connection = DatabaseManager.getConnection();
+             PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
+            preparedStatement.setInt(1, itemId);
+            try (ResultSet rs = preparedStatement.executeQuery()) {
+                while (rs.next()) {
+                    rows.add(mapIssuanceAdminRow(rs));
+                }
+            }
+            return rows;
+        } catch (SQLException ex) {
+            throw new IllegalStateException("Failed to load item issuance history", ex);
+        }
+    }
+
+    public void issueItem(int officerId, int itemId, Integer issuedByUserId, LocalDate issuedDate) {
+        String insertSql = "INSERT INTO issuances(officer_id, item_id, issued_by_user_id, issued_date, returned_by_user_id, returned_date) VALUES(?, ?, ?, ?, NULL, NULL)";
         EquipmentDao equipmentDao = new EquipmentDao();
 
         try (Connection connection = DatabaseManager.getConnection()) {
@@ -65,7 +125,12 @@ public class IssuanceDao {
             try (PreparedStatement preparedStatement = connection.prepareStatement(insertSql)) {
                 preparedStatement.setInt(1, officerId);
                 preparedStatement.setInt(2, itemId);
-                preparedStatement.setDate(3, Date.valueOf(issuedDate));
+                if (issuedByUserId == null) {
+                    preparedStatement.setNull(3, java.sql.Types.INTEGER);
+                } else {
+                    preparedStatement.setInt(3, issuedByUserId);
+                }
+                preparedStatement.setDate(4, Date.valueOf(issuedDate));
                 preparedStatement.executeUpdate();
             }
             equipmentDao.updateStatus(connection, itemId, EquipmentStatus.ISSUED);
@@ -76,7 +141,12 @@ public class IssuanceDao {
                     try (PreparedStatement preparedStatement = connection.prepareStatement(insertSql)) {
                         preparedStatement.setInt(1, officerId);
                         preparedStatement.setInt(2, attachmentId);
-                        preparedStatement.setDate(3, Date.valueOf(issuedDate));
+                        if (issuedByUserId == null) {
+                            preparedStatement.setNull(3, java.sql.Types.INTEGER);
+                        } else {
+                            preparedStatement.setInt(3, issuedByUserId);
+                        }
+                        preparedStatement.setDate(4, Date.valueOf(issuedDate));
                         preparedStatement.executeUpdate();
                     }
                     equipmentDao.updateStatus(connection, attachmentId, EquipmentStatus.ISSUED);
@@ -89,10 +159,10 @@ public class IssuanceDao {
         }
     }
 
-    public void returnItemAndAttachments(int issuanceId) {
+    public void returnItemAndAttachments(int issuanceId, Integer returnedByUserId) {
         String issuanceSql = "SELECT item_id FROM issuances WHERE issuance_id = ?";
-        String closeIssuanceSql = "UPDATE issuances SET returned_date = CURDATE() WHERE issuance_id = ?";
-        String closeByItemSql = "UPDATE issuances SET returned_date = CURDATE() WHERE item_id = ? AND returned_date IS NULL";
+        String closeIssuanceSql = "UPDATE issuances SET returned_by_user_id = ?, returned_date = CURDATE() WHERE issuance_id = ?";
+        String closeByItemSql = "UPDATE issuances SET returned_by_user_id = ?, returned_date = CURDATE() WHERE item_id = ? AND returned_date IS NULL";
         EquipmentDao equipmentDao = new EquipmentDao();
 
         try (Connection connection = DatabaseManager.getConnection()) {
@@ -110,7 +180,12 @@ public class IssuanceDao {
             }
 
             try (PreparedStatement preparedStatement = connection.prepareStatement(closeIssuanceSql)) {
-                preparedStatement.setInt(1, issuanceId);
+                if (returnedByUserId == null) {
+                    preparedStatement.setNull(1, java.sql.Types.INTEGER);
+                } else {
+                    preparedStatement.setInt(1, returnedByUserId);
+                }
+                preparedStatement.setInt(2, issuanceId);
                 preparedStatement.executeUpdate();
             }
             equipmentDao.updateStatus(connection, itemId, EquipmentStatus.AVAILABLE);
@@ -120,7 +195,12 @@ public class IssuanceDao {
                 List<Integer> attachmentIds = equipmentDao.findAttachmentIds(connection, itemId);
                 try (PreparedStatement preparedStatement = connection.prepareStatement(closeByItemSql)) {
                     for (int attachmentId : attachmentIds) {
-                        preparedStatement.setInt(1, attachmentId);
+                        if (returnedByUserId == null) {
+                            preparedStatement.setNull(1, java.sql.Types.INTEGER);
+                        } else {
+                            preparedStatement.setInt(1, returnedByUserId);
+                        }
+                        preparedStatement.setInt(2, attachmentId);
                         preparedStatement.executeUpdate();
                         equipmentDao.updateStatus(connection, attachmentId, EquipmentStatus.AVAILABLE);
                     }
@@ -139,9 +219,10 @@ public class IssuanceDao {
                        e.item_id,
                        e.name AS item_name,
                        e.serial_number,
+                       e.replacement_cost,
                        e.branch,
                        e.is_attachment,
-                       et.name AS equipment_type_name,
+                      COALESCE(et.name, ui.name) AS equipment_type_name,
                        wt.name AS weapon_type_name,
                        ca.name AS caliber_name,
                        sz.name AS size_name,
@@ -150,6 +231,7 @@ public class IssuanceDao {
                 FROM issuances i
                 JOIN equipment_items e ON e.item_id = i.item_id
                 LEFT JOIN equipment_types   et ON et.id = e.equipment_type_id
+                  LEFT JOIN uniform_items     ui ON ui.id = e.equipment_type_id
                 LEFT JOIN weapon_types      wt ON wt.id = e.weapon_type_id
                 LEFT JOIN calibers          ca ON ca.id = e.caliber_id
                 LEFT JOIN uniform_sizes     sz ON sz.id = e.size_id
@@ -178,6 +260,7 @@ public class IssuanceDao {
                             branch,
                             summary,
                             rs.getString("serial_number"),
+                            nullableDouble(rs, "replacement_cost"),
                             rs.getDate("issued_date").toLocalDate(),
                             rs.getString("attached_to_weapon")
                     ));
@@ -219,5 +302,41 @@ public class IssuanceDao {
             builder.append(branch.getDisplayName());
         }
         return builder.toString();
+    }
+
+    private IssuanceAdminRow mapIssuanceAdminRow(ResultSet rs) throws SQLException {
+        Date returnedDate = rs.getDate("returned_date");
+        EquipmentBranch branch = EquipmentBranch.fromName(rs.getString("branch"));
+        String summary = buildSummary(
+                branch,
+                rs.getString("equipment_type_name"),
+                rs.getString("weapon_type_name"),
+                rs.getString("caliber_name"),
+                rs.getString("size_name"),
+                rs.getBoolean("is_attachment")
+        );
+
+        return new IssuanceAdminRow(
+                rs.getInt("issuance_id"),
+                rs.getInt("officer_id"),
+                rs.getString("officer_name"),
+                rs.getInt("item_id"),
+                rs.getString("item_name"),
+                branch.getDisplayName(),
+                summary,
+                rs.getString("serial_number"),
+                nullableDouble(rs, "replacement_cost"),
+                rs.getString("condition"),
+                rs.getString("status"),
+                rs.getString("issued_by_username"),
+                rs.getString("returned_by_username"),
+                rs.getDate("issued_date").toLocalDate(),
+                returnedDate == null ? null : returnedDate.toLocalDate()
+        );
+    }
+
+    private Double nullableDouble(ResultSet rs, String column) throws SQLException {
+        Number value = (Number) rs.getObject(column);
+        return value == null ? null : value.doubleValue();
     }
 }

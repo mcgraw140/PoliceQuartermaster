@@ -1,6 +1,10 @@
 package com.quartermaster;
 
+import com.quartermaster.auth.AuthenticatedUser;
+import com.quartermaster.auth.SessionManager;
+import com.quartermaster.auth.UserRole;
 import com.quartermaster.db.DatabaseInitializer;
+import com.quartermaster.service.AuthService;
 import javafx.application.Application;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
@@ -9,6 +13,7 @@ import javafx.scene.control.Alert;
 import javafx.stage.Stage;
 
 import java.io.IOException;
+import java.util.Optional;
 
 public class Main extends Application {
     private static Stage primaryStage;
@@ -25,7 +30,20 @@ public class Main extends Application {
             alert.showAndWait();
         }
         primaryStage = stage;
-        switchScene("/com/quartermaster/fxml/login.fxml", "Quartermaster Login", 420, 280);
+
+        AuthService authService = new AuthService();
+        Optional<AuthenticatedUser> autoLogin = Optional.empty();
+        try {
+            autoLogin = authService.authenticate("admin", "admin123");
+        } catch (IllegalStateException ignored) {
+        }
+
+        if (autoLogin.isPresent() && autoLogin.get().getRole() == UserRole.ADMIN) {
+            SessionManager.login(autoLogin.get());
+            switchScene("/com/quartermaster/fxml/main_admin.fxml", "Quartermaster - Admin", 1180, 740);
+        } else {
+            switchScene("/com/quartermaster/fxml/login.fxml", "Quartermaster Login", 420, 280);
+        }
         primaryStage.show();
     }
 
