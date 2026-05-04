@@ -29,13 +29,6 @@ import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
 import javafx.fxml.FXML;
 import javafx.geometry.Insets;
-import javafx.print.PageLayout;
-import javafx.print.PageOrientation;
-import javafx.print.Paper;
-import javafx.print.Printer;
-import javafx.print.PrinterJob;
-import javafx.scene.Node;
-import javafx.scene.Group;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonBar;
@@ -56,18 +49,12 @@ import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
-import javafx.scene.transform.Scale;
+import javafx.util.StringConverter;
 import javafx.stage.Window;
 import org.mindrot.jbcrypt.BCrypt;
 
-import java.awt.Desktop;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -137,7 +124,16 @@ public class AdminController {
     private ComboBox<String> inventoryStatusFilterCombo;
 
     @FXML
+    private CheckBox inventoryHistoricalItemsCheckBox;
+
+    @FXML
     private Label inventorySummaryLabel;
+
+    @FXML
+    private HBox inventoryHeaderRow;
+
+    @FXML
+    private VBox inventoryFiltersCard;
 
     @FXML
     private Button attachItemButton;
@@ -168,6 +164,78 @@ public class AdminController {
 
     @FXML
     private TableColumn<EquipmentItem, String> equipmentStatusColumn;
+
+    @FXML
+    private VBox inventoryListCard;
+
+    @FXML
+    private VBox inventoryAddPagePane;
+
+    @FXML
+    private ComboBox<EquipmentBranch> addEqBranchCombo;
+
+    @FXML
+    private TextField addEqMakeField;
+
+    @FXML
+    private TextField addEqModelField;
+
+    @FXML
+    private TextField addEqNameField;
+
+    @FXML
+    private ComboBox<LookupItem> addEqTypeCombo;
+
+    @FXML
+    private HBox addEqCategoryRow;
+
+    @FXML
+    private ComboBox<LookupItem> addEqWeaponTypeCombo;
+
+    @FXML
+    private HBox addEqWeaponRow;
+
+    @FXML
+    private ComboBox<LookupItem> addEqCaliberCombo;
+
+    @FXML
+    private ComboBox<LookupItem> addEqSizeCombo;
+
+    @FXML
+    private HBox addEqUniformSizeRow;
+
+    @FXML
+    private ComboBox<LookupItem> addEqStorageCombo;
+
+    @FXML
+    private TextField addEqReplacementCostField;
+
+    @FXML
+    private ComboBox<EquipmentCondition> addEqConditionCombo;
+
+    @FXML
+    private ComboBox<EquipmentStatus> addEqStatusCombo;
+
+    @FXML
+    private CheckBox addEqAttachmentCheck;
+
+    @FXML
+    private HBox addEqAttachmentRow;
+
+    @FXML
+    private TextArea addEqSerialsArea;
+
+    @FXML
+    private VBox addEqSerialsSection;
+
+    @FXML
+    private TextField addEqQuantityField;
+
+    @FXML
+    private TextField addEqSerialPrefixField;
+
+    @FXML
+    private HBox addEqUniformSection;
 
     @FXML
     private ComboBox<Officer> issueOfficerCombo;
@@ -375,6 +443,7 @@ public class AdminController {
         welcomeLabel.setText("Admin: " + SessionManager.getCurrentUser().getUsername());
         setupTables();
         setupFilters();
+        setupAddEquipmentPage();
         setupLookupAdmin();
         loadAgencySettings();
         issueDatePicker.setValue(LocalDate.now());
@@ -386,10 +455,10 @@ public class AdminController {
     @FXML
     public void onTopTabEquipment() {
         activeMainTab = MainTab.EQUIPMENT;
-        setPaneVisible(moduleInventoryPane, true);
-        setPaneVisible(moduleIssuePane, false);
-        setPaneVisible(moduleFleetPane, false);
-        setPaneVisible(moduleAdminPane, false);
+        UiNavSupport.setPaneVisible(moduleInventoryPane, true);
+        UiNavSupport.setPaneVisible(moduleIssuePane, false);
+        UiNavSupport.setPaneVisible(moduleFleetPane, false);
+        UiNavSupport.setPaneVisible(moduleAdminPane, false);
         applyTopTabStyles();
         showEquipmentSubNav();
         refreshEquipmentAndIssueOptions();
@@ -398,22 +467,22 @@ public class AdminController {
     @FXML
     public void onTopTabIssueReturn() {
         activeMainTab = MainTab.ISSUE_RETURN;
-        setPaneVisible(moduleInventoryPane, false);
-        setPaneVisible(moduleIssuePane, true);
-        setPaneVisible(moduleFleetPane, false);
-        setPaneVisible(moduleAdminPane, false);
+        UiNavSupport.setPaneVisible(moduleInventoryPane, false);
+        UiNavSupport.setPaneVisible(moduleIssuePane, true);
+        UiNavSupport.setPaneVisible(moduleFleetPane, false);
+        UiNavSupport.setPaneVisible(moduleAdminPane, false);
         applyTopTabStyles();
-        setModuleNavMessage("Assign equipment by officer.");
+        UiNavSupport.setModuleNavMessage(moduleNavBar, moduleNavLabel, "Assign equipment by officer.");
         refreshIssueOptions();
     }
 
     @FXML
     public void onTopTabAdmin() {
         activeMainTab = MainTab.ADMIN;
-        setPaneVisible(moduleInventoryPane, false);
-        setPaneVisible(moduleIssuePane, false);
-        setPaneVisible(moduleFleetPane, false);
-        setPaneVisible(moduleAdminPane, true);
+        UiNavSupport.setPaneVisible(moduleInventoryPane, false);
+        UiNavSupport.setPaneVisible(moduleIssuePane, false);
+        UiNavSupport.setPaneVisible(moduleFleetPane, false);
+        UiNavSupport.setPaneVisible(moduleAdminPane, true);
         applyTopTabStyles();
         showAdminSubNav(AdminSubTab.PERSONNEL);
     }
@@ -421,13 +490,18 @@ public class AdminController {
     @FXML
     public void onTopTabVehicle() {
         activeMainTab = MainTab.VEHICLE;
-        setPaneVisible(moduleInventoryPane, false);
-        setPaneVisible(moduleIssuePane, false);
-        setPaneVisible(moduleFleetPane, true);
-        setPaneVisible(moduleAdminPane, false);
+        UiNavSupport.setPaneVisible(moduleInventoryPane, false);
+        UiNavSupport.setPaneVisible(moduleIssuePane, false);
+        UiNavSupport.setPaneVisible(moduleFleetPane, true);
+        UiNavSupport.setPaneVisible(moduleAdminPane, false);
         applyTopTabStyles();
-        setModuleNavMessage("Manage fleet units and maintenance history.");
-        refreshVehiclesAndMaintenanceOptions();
+        UiNavSupport.setModuleNavMessage(moduleNavBar, moduleNavLabel, "Manage fleet units and maintenance history.");
+        FleetViewSupport.refreshVehiclesAndMaintenanceOptions(
+            vehicleDao,
+            vehiclesTable,
+            maintenanceVehicleCombo,
+            this::onMaintenanceVehicleChanged
+        );
     }
 
     @FXML
@@ -444,6 +518,9 @@ public class AdminController {
     public void onClearInventoryFilters() {
         inventorySearchField.setText("");
         inventoryStatusFilterCombo.getSelectionModel().select("All");
+        if (inventoryHistoricalItemsCheckBox != null) {
+            inventoryHistoricalItemsCheckBox.setSelected(false);
+        }
         refreshEquipmentAndIssueOptions();
     }
 
@@ -459,7 +536,17 @@ public class AdminController {
 
     @FXML
     public void onAddEquipment() {
-        EquipmentFormData formData = showEquipmentDialog(null);
+        showAddEquipmentPage(true);
+    }
+
+    @FXML
+    public void onCancelAddEquipmentPage() {
+        showAddEquipmentPage(false);
+    }
+
+    @FXML
+    public void onSaveAddEquipmentPage() {
+        EquipmentFormData formData = buildAddEquipmentPageFormData();
         if (formData == null) {
             return;
         }
@@ -489,6 +576,7 @@ public class AdminController {
         if (created > 1) {
             UiAlerts.info("Equipment", "Added " + created + " items.");
         }
+        showAddEquipmentPage(false);
         refreshEquipmentAndIssueOptions();
     }
 
@@ -517,17 +605,18 @@ public class AdminController {
             return;
         }
 
-        if (equipmentDao.hasIssuanceHistory(selected.getItemId())) {
-            UiAlerts.error("Equipment", "Cannot delete equipment with issuance history. Set status to RETIRED instead.");
-            return;
-        }
-
         try {
-            equipmentDao.delete(selected.getItemId());
+            if (selected.getStatus() == EquipmentStatus.RETIRED) {
+                UiAlerts.info("Equipment", "Item is already RETIRED.");
+                return;
+            }
+
+            equipmentDao.updateStatus(selected.getItemId(), EquipmentStatus.RETIRED);
             refreshEquipmentAndIssueOptions();
+            UiAlerts.info("Equipment", "Item set to RETIRED. Equipment is no longer physically deleted.");
         } catch (IllegalStateException ex) {
             ex.printStackTrace();
-            UiAlerts.error("Equipment", "Unable to delete equipment. It may be linked to history or other records.");
+            UiAlerts.error("Equipment", "Unable to update equipment status.");
         }
     }
 
@@ -618,7 +707,12 @@ public class AdminController {
             }
         }
 
-        clearPendingChanges();
+        IssueWorkflowSupport.clearPendingChanges(
+            pendingIssueItemsById,
+            pendingIssuedRowsByItemId,
+            pendingReturnRowsByIssuanceId,
+            pendingReturnIssuanceIds
+        );
 
         refreshIssueOptions();
         refreshIssuedItemsForOfficer();
@@ -634,7 +728,7 @@ public class AdminController {
             return;
         }
 
-        List<EquipmentItem> selected = selectedOrFocusedAvailableRows();
+        List<EquipmentItem> selected = IssueWorkflowSupport.selectedOrFocusedAvailableRows(issueAvailableTable);
         if (selected.isEmpty()) {
             UiAlerts.error("Issue / Return", "Select at least one available item.");
             return;
@@ -642,10 +736,23 @@ public class AdminController {
 
         for (EquipmentItem item : selected) {
             if (item.getItemId() > 0) {
-                stageIssue(item);
+                IssueWorkflowSupport.stageIssue(
+                        item,
+                        issueDatePicker.getValue(),
+                        pendingIssueItemsById,
+                        pendingIssuedRowsByItemId,
+                        issueAvailableSource,
+                        issuedToOfficerItems
+                );
             } else {
                 int issuanceId = -item.getItemId();
-                cancelStagedReturn(issuanceId);
+                IssueWorkflowSupport.cancelStagedReturn(
+                        issuanceId,
+                        pendingReturnRowsByIssuanceId,
+                        pendingReturnIssuanceIds,
+                        issueAvailableSource,
+                        issuedToOfficerItems
+                );
             }
         }
         issueAvailableTable.getSelectionModel().clearSelection();
@@ -653,7 +760,7 @@ public class AdminController {
 
     @FXML
     public void onRemoveIssueSelection() {
-        List<IssuedItemRow> selected = selectedOrFocusedIssuedRows();
+        List<IssuedItemRow> selected = IssueWorkflowSupport.selectedOrFocusedIssuedRows(issueSelectedTable);
         if (selected.isEmpty()) {
             UiAlerts.error("Issue / Return", "Select at least one issued item to return.");
             return;
@@ -661,9 +768,31 @@ public class AdminController {
 
         for (IssuedItemRow row : selected) {
             if (row.getIssuanceId() < 0) {
-                cancelStagedIssue(row.getIssuanceId());
+                IssueWorkflowSupport.cancelStagedIssue(
+                        row.getIssuanceId(),
+                        pendingIssueItemsById,
+                        pendingIssuedRowsByItemId,
+                        issueAvailableSource,
+                        issuedToOfficerItems
+                );
             } else {
-                stageReturn(row);
+                if (row.getQuantity() > 1 && row.getIssuanceIds() != null && !row.getIssuanceIds().isEmpty()) {
+                    IssueWorkflowSupport.stageGroupedReturn(
+                            row,
+                            pendingReturnRowsByIssuanceId,
+                            pendingReturnIssuanceIds,
+                            issueAvailableSource,
+                            issuedToOfficerItems
+                    );
+                } else {
+                    IssueWorkflowSupport.stageReturn(
+                            row,
+                            pendingReturnRowsByIssuanceId,
+                            pendingReturnIssuanceIds,
+                            issueAvailableSource,
+                            issuedToOfficerItems
+                    );
+                }
             }
         }
         issueSelectedTable.getSelectionModel().clearSelection();
@@ -697,7 +826,12 @@ public class AdminController {
 
         vehicleDao.insert(formData.unitNumber(), formData.vehicleTypeId(), formData.make(), formData.model(),
                 formData.year(), formData.vin(), formData.plate());
-        refreshVehiclesAndMaintenanceOptions();
+        FleetViewSupport.refreshVehiclesAndMaintenanceOptions(
+            vehicleDao,
+            vehiclesTable,
+            maintenanceVehicleCombo,
+            this::onMaintenanceVehicleChanged
+        );
     }
 
     @FXML
@@ -715,7 +849,12 @@ public class AdminController {
 
         vehicleDao.update(selected.getVehicleId(), formData.unitNumber(), formData.vehicleTypeId(), formData.make(),
                 formData.model(), formData.year(), formData.vin(), formData.plate());
-        refreshVehiclesAndMaintenanceOptions();
+        FleetViewSupport.refreshVehiclesAndMaintenanceOptions(
+            vehicleDao,
+            vehiclesTable,
+            maintenanceVehicleCombo,
+            this::onMaintenanceVehicleChanged
+        );
     }
 
     @FXML
@@ -727,7 +866,12 @@ public class AdminController {
         }
 
         vehicleDao.delete(selected.getVehicleId());
-        refreshVehiclesAndMaintenanceOptions();
+        FleetViewSupport.refreshVehiclesAndMaintenanceOptions(
+            vehicleDao,
+            vehiclesTable,
+            maintenanceVehicleCombo,
+            this::onMaintenanceVehicleChanged
+        );
     }
 
     @FXML
@@ -756,11 +900,11 @@ public class AdminController {
             return;
         }
 
-        MaintenanceDialogResult result = showMaintenanceDialog(selected, null);
+        MaintenanceLogDialog.Result result = MaintenanceLogDialog.show(selected, null);
         if (result == null || result.deleteRequested()) {
             return;
         }
-        MaintenanceFormData formData = result.formData();
+        MaintenanceLogDialog.FormData formData = result.formData();
 
         maintenanceLogDao.insert(selected.getVehicleId(), formData.logDate(), formData.mileage(),
                 formData.cost(), formData.description(), formData.performedBy());
@@ -781,7 +925,7 @@ public class AdminController {
             return;
         }
 
-        MaintenanceDialogResult result = showMaintenanceDialog(selectedVehicle, selectedLog);
+        MaintenanceLogDialog.Result result = MaintenanceLogDialog.show(selectedVehicle, selectedLog);
         if (result == null) {
             return;
         }
@@ -793,7 +937,7 @@ public class AdminController {
             return;
         }
 
-        MaintenanceFormData formData = result.formData();
+        MaintenanceLogDialog.FormData formData = result.formData();
 
         maintenanceLogDao.update(selectedLog.getLogId(), selectedVehicle.getVehicleId(), formData.logDate(),
                 formData.mileage(), formData.cost(), formData.description(), formData.performedBy());
@@ -821,288 +965,15 @@ public class AdminController {
     }
 
     private void showVehicleMaintenanceHistoryDialog(Vehicle vehicle) {
-        if (vehicle == null) {
-            return;
-        }
-
-        List<VehicleMaintenanceLog> logs = new ArrayList<>(maintenanceLogDao.findByVehicle(vehicle.getVehicleId()));
-        double totalCost = maintenanceLogDao.findTotalCostByVehicle(vehicle.getVehicleId());
-
-        Dialog<ButtonType> dialog = new Dialog<>();
-        dialog.setTitle("Vehicle Maintenance History");
-        UiAlerts.applyTheme(dialog);
-
-        ButtonType printButton = new ButtonType("Print", ButtonBar.ButtonData.OTHER);
-        ButtonType closeButton = new ButtonType("Close", ButtonBar.ButtonData.CANCEL_CLOSE);
-        dialog.getDialogPane().getButtonTypes().addAll(printButton, closeButton);
-
-        Label title = new Label("Maintenance History");
-        title.setStyle("-fx-font-size: 18px; -fx-font-weight: 700;");
-        Label vehicleLine = new Label("Vehicle: " + vehicle.getUnitNumber() + " - " + vehicle.getMake() + " " + vehicle.getModel());
-        Label metaLine = new Label("Type: " + (vehicle.getVehicleTypeName() == null ? "" : vehicle.getVehicleTypeName())
-                + "   VIN: " + (vehicle.getVin() == null ? "" : vehicle.getVin())
-                + "   Plate: " + (vehicle.getPlateNumber() == null ? "" : vehicle.getPlateNumber()));
-        Label totalLine = new Label("Total Maintenance Cost: " + String.format("$%.2f", totalCost));
-        totalLine.setStyle("-fx-font-size: 14px; -fx-font-weight: 700;");
-
-        TableView<VehicleMaintenanceLog> historyTable = new TableView<>(FXCollections.observableArrayList(logs));
-        historyTable.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
-        historyTable.setPrefHeight(Math.min(520, 170 + logs.size() * 26.0));
-
-        TableColumn<VehicleMaintenanceLog, String> dateCol = new TableColumn<>("Date");
-        dateCol.setCellValueFactory(cellData -> Bindings.createStringBinding(
-                () -> cellData.getValue().getLogDate() == null ? "" : cellData.getValue().getLogDate().toString()
-        ));
-        TableColumn<VehicleMaintenanceLog, Integer> mileageCol = new TableColumn<>("Mileage");
-        mileageCol.setCellValueFactory(new PropertyValueFactory<>("mileage"));
-        TableColumn<VehicleMaintenanceLog, String> descriptionCol = new TableColumn<>("Description");
-        descriptionCol.setCellValueFactory(new PropertyValueFactory<>("description"));
-        TableColumn<VehicleMaintenanceLog, String> byCol = new TableColumn<>("Performed By");
-        byCol.setCellValueFactory(new PropertyValueFactory<>("performedBy"));
-        TableColumn<VehicleMaintenanceLog, String> costCol = new TableColumn<>("Cost");
-        costCol.setCellValueFactory(cellData -> Bindings.createStringBinding(() -> {
-            Double value = cellData.getValue().getCost();
-            return value == null ? "" : String.format("$%.2f", value);
-        }));
-        historyTable.getColumns().clear();
-        historyTable.getColumns().addAll(List.of(dateCol, mileageCol, descriptionCol, byCol, costCol));
-
-        historyTable.setRowFactory(tableView -> {
-            TableRow<VehicleMaintenanceLog> row = new TableRow<>();
-            row.setOnMouseClicked(event -> {
-                if (event.getClickCount() == 2 && !row.isEmpty()) {
-                    VehicleMaintenanceLog selected = row.getItem();
-                    if (showMaintenanceLogDetailEditDeleteOption(vehicle, selected)) {
-                        List<VehicleMaintenanceLog> refreshed = maintenanceLogDao.findByVehicle(vehicle.getVehicleId());
-                        historyTable.setItems(FXCollections.observableArrayList(refreshed));
-                        maintenanceTable.setItems(FXCollections.observableArrayList(refreshed));
-                        totalLine.setText("Total Maintenance Cost: " + String.format("$%.2f", maintenanceLogDao.findTotalCostByVehicle(vehicle.getVehicleId())));
-                    }
-                }
-            });
-            return row;
-        });
-
-        VBox content = new VBox(10, title, vehicleLine, metaLine, totalLine, historyTable);
-        content.setPadding(new Insets(10));
-        dialog.getDialogPane().setContent(content);
-
-        while (true) {
-            Optional<ButtonType> result = dialog.showAndWait();
-            if (result.isEmpty() || result.get() == closeButton) {
-                break;
-            }
-            if (result.get() == printButton) {
-                List<VehicleMaintenanceLog> currentLogs = new ArrayList<>(historyTable.getItems());
-                double currentTotal = maintenanceLogDao.findTotalCostByVehicle(vehicle.getVehicleId());
-                if (openVehicleMaintenanceHistoryPrintPreview(vehicle, currentLogs, currentTotal)) {
-                    continue;
-                }
-                VBox printable = buildVehicleMaintenanceHistoryPrintableNode(vehicle, currentLogs, currentTotal);
-                Window owner = moduleFleetPane != null && moduleFleetPane.getScene() != null
+        FleetMaintenanceHistorySupport.showVehicleMaintenanceHistoryDialog(
+                vehicle,
+                maintenanceLogDao,
+                maintenanceTable,
+                this::getAgencyName,
+                () -> moduleFleetPane != null && moduleFleetPane.getScene() != null
                         ? moduleFleetPane.getScene().getWindow()
-                        : null;
-                printNode(owner, printable);
-            }
-        }
-    }
-
-    private boolean showMaintenanceLogDetailEditDeleteOption(Vehicle vehicle, VehicleMaintenanceLog log) {
-        Dialog<ButtonType> detailDialog = new Dialog<>();
-        detailDialog.setTitle("Maintenance Details");
-        UiAlerts.applyTheme(detailDialog);
-
-        ButtonType editButton = new ButtonType("Edit", ButtonBar.ButtonData.OTHER);
-        ButtonType deleteButton = new ButtonType("Delete", ButtonBar.ButtonData.LEFT);
-        ButtonType closeButton = new ButtonType("Close", ButtonBar.ButtonData.CANCEL_CLOSE);
-        detailDialog.getDialogPane().getButtonTypes().addAll(editButton, deleteButton, closeButton);
-
-        GridPane details = new GridPane();
-        details.setHgap(12);
-        details.setVgap(8);
-        details.add(new Label("Date"), 0, 0);
-        details.add(new Label(log.getLogDate() == null ? "" : log.getLogDate().toString()), 1, 0);
-        details.add(new Label("Mileage"), 0, 1);
-        details.add(new Label(log.getMileage() == null ? "" : String.valueOf(log.getMileage())), 1, 1);
-        details.add(new Label("Performed By"), 0, 2);
-        details.add(new Label(log.getPerformedBy() == null ? "" : log.getPerformedBy()), 1, 2);
-        details.add(new Label("Cost"), 0, 3);
-        details.add(new Label(log.getCost() == null ? "" : String.format("$%.2f", log.getCost())), 1, 3);
-        details.add(new Label("Description"), 0, 4);
-        TextArea description = new TextArea(log.getDescription() == null ? "" : log.getDescription());
-        description.setEditable(false);
-        description.setWrapText(true);
-        description.setPrefRowCount(5);
-        details.add(description, 1, 4);
-
-        detailDialog.getDialogPane().setContent(details);
-
-        Optional<ButtonType> result = detailDialog.showAndWait();
-        if (result.isPresent() && result.get() == editButton) {
-            MaintenanceDialogResult dialogResult = showMaintenanceDialog(vehicle, log);
-            if (dialogResult == null) {
-                return false;
-            }
-
-            if (dialogResult.deleteRequested()) {
-                maintenanceLogDao.delete(log.getLogId());
-                UiAlerts.info("Maintenance", "Maintenance log deleted.");
-                return true;
-            }
-
-            MaintenanceFormData formData = dialogResult.formData();
-            maintenanceLogDao.update(log.getLogId(), vehicle.getVehicleId(), formData.logDate(),
-                    formData.mileage(), formData.cost(), formData.description(), formData.performedBy());
-            UiAlerts.info("Maintenance", "Maintenance log updated.");
-            return true;
-        }
-        if (result.isPresent() && result.get() == deleteButton) {
-            maintenanceLogDao.delete(log.getLogId());
-            UiAlerts.info("Maintenance", "Maintenance log deleted.");
-            return true;
-        }
-        return false;
-    }
-
-    private boolean openVehicleMaintenanceHistoryPrintPreview(Vehicle vehicle, List<VehicleMaintenanceLog> logs, double totalCost) {
-        try {
-            if (!Desktop.isDesktopSupported()) {
-                return false;
-            }
-            Desktop desktop = Desktop.getDesktop();
-            if (!desktop.isSupported(Desktop.Action.BROWSE)) {
-                return false;
-            }
-            Path tempHtml = Files.createTempFile("quartermaster-vehicle-maintenance-", ".html");
-            Files.writeString(tempHtml, buildVehicleMaintenanceHistoryHtml(vehicle, logs, totalCost), StandardCharsets.UTF_8);
-            tempHtml.toFile().deleteOnExit();
-            desktop.browse(tempHtml.toUri());
-            return true;
-        } catch (IOException ex) {
-            ex.printStackTrace();
-            UiAlerts.error("Print Preview", "Could not open Windows print preview. Falling back to print dialog.");
-            return false;
-        }
-    }
-
-    private String buildVehicleMaintenanceHistoryHtml(Vehicle vehicle, List<VehicleMaintenanceLog> logs, double totalCost) {
-        String agencyName = getAgencyName();
-        String printedAt = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
-
-        StringBuilder rows = new StringBuilder();
-        for (VehicleMaintenanceLog log : logs) {
-            rows.append("<tr>")
-                    .append("<td>").append(escapeHtml(log.getLogDate() == null ? "" : log.getLogDate().toString())).append("</td>")
-                    .append("<td>").append(escapeHtml(log.getMileage() == null ? "" : String.valueOf(log.getMileage()))).append("</td>")
-                    .append("<td>").append(escapeHtml(log.getDescription())).append("</td>")
-                    .append("<td>").append(escapeHtml(log.getPerformedBy())).append("</td>")
-                    .append("<td>").append(escapeHtml(log.getCost() == null ? "" : String.format("$%.2f", log.getCost()))).append("</td>")
-                    .append("</tr>");
-        }
-
-        return """
-                <!doctype html>
-                <html lang=\"en\">
-                <head>
-                  <meta charset=\"utf-8\" />
-                  <title>Vehicle Maintenance History</title>
-                  <style>
-                    body { font-family: Segoe UI, Tahoma, Arial, sans-serif; margin: 20px; color: #111; }
-                    h1 { margin: 0; font-size: 28px; }
-                    h2 { margin: 6px 0 14px 0; font-size: 20px; }
-                    .meta { margin: 4px 0; font-size: 14px; }
-                    table { width: 100%%; border-collapse: collapse; margin-top: 12px; }
-                    th, td { border: 1px solid #444; padding: 8px; text-align: left; font-size: 13px; }
-                    th { background: #efefef; }
-                  </style>
-                </head>
-                <body onload=\"setTimeout(function(){ window.print(); }, 200);\">
-                  <h1>%s</h1>
-                  <h2>Vehicle Maintenance History</h2>
-                  <div class=\"meta\"><strong>Printed:</strong> %s</div>
-                  <div class=\"meta\"><strong>Vehicle:</strong> %s - %s %s</div>
-                  <div class=\"meta\"><strong>Type:</strong> %s</div>
-                  <div class=\"meta\"><strong>VIN:</strong> %s</div>
-                  <div class=\"meta\"><strong>Plate:</strong> %s</div>
-                  <div class=\"meta\"><strong>Total Maintenance Cost:</strong> %s</div>
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Date</th>
-                        <th>Mileage</th>
-                        <th>Description</th>
-                        <th>Performed By</th>
-                        <th>Cost</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      %s
-                    </tbody>
-                  </table>
-                </body>
-                </html>
-                """.formatted(
-                escapeHtml(agencyName),
-                escapeHtml(printedAt),
-                escapeHtml(vehicle.getUnitNumber()),
-                escapeHtml(vehicle.getMake()),
-                escapeHtml(vehicle.getModel()),
-                escapeHtml(vehicle.getVehicleTypeName()),
-                escapeHtml(vehicle.getVin()),
-                escapeHtml(vehicle.getPlateNumber()),
-                escapeHtml(String.format("$%.2f", totalCost)),
-                rows
+                        : null
         );
-    }
-
-    private VBox buildVehicleMaintenanceHistoryPrintableNode(Vehicle vehicle, List<VehicleMaintenanceLog> logs, double totalCost) {
-        Label title = new Label(getAgencyName());
-        title.setStyle("-fx-font-size: 22px; -fx-font-weight: 700; -fx-text-fill: black;");
-        Label subtitle = new Label("Vehicle Maintenance History");
-        subtitle.setStyle("-fx-font-size: 18px; -fx-font-weight: 700; -fx-text-fill: black;");
-        Label printed = new Label("Printed: " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")));
-        printed.setStyle("-fx-text-fill: #333333;");
-
-        GridPane info = new GridPane();
-        info.setHgap(16);
-        info.setVgap(8);
-        info.add(new Label("Vehicle"), 0, 0);
-        info.add(new Label(vehicle.getUnitNumber() + " - " + vehicle.getMake() + " " + vehicle.getModel()), 1, 0);
-        info.add(new Label("Type"), 0, 1);
-        info.add(new Label(vehicle.getVehicleTypeName() == null ? "" : vehicle.getVehicleTypeName()), 1, 1);
-        info.add(new Label("VIN"), 0, 2);
-        info.add(new Label(vehicle.getVin() == null ? "" : vehicle.getVin()), 1, 2);
-        info.add(new Label("Plate"), 0, 3);
-        info.add(new Label(vehicle.getPlateNumber() == null ? "" : vehicle.getPlateNumber()), 1, 3);
-        info.add(new Label("Total Maintenance Cost"), 0, 4);
-        info.add(new Label(String.format("$%.2f", totalCost)), 1, 4);
-
-        TableView<VehicleMaintenanceLog> table = new TableView<>(FXCollections.observableArrayList(logs));
-        table.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
-        table.setPrefHeight(Math.min(520, 150 + logs.size() * 26.0));
-
-        TableColumn<VehicleMaintenanceLog, String> dateCol = new TableColumn<>("Date");
-        dateCol.setCellValueFactory(cellData -> Bindings.createStringBinding(
-                () -> cellData.getValue().getLogDate() == null ? "" : cellData.getValue().getLogDate().toString()
-        ));
-        TableColumn<VehicleMaintenanceLog, Integer> mileageCol = new TableColumn<>("Mileage");
-        mileageCol.setCellValueFactory(new PropertyValueFactory<>("mileage"));
-        TableColumn<VehicleMaintenanceLog, String> descriptionCol = new TableColumn<>("Description");
-        descriptionCol.setCellValueFactory(new PropertyValueFactory<>("description"));
-        TableColumn<VehicleMaintenanceLog, String> byCol = new TableColumn<>("Performed By");
-        byCol.setCellValueFactory(new PropertyValueFactory<>("performedBy"));
-        TableColumn<VehicleMaintenanceLog, String> costCol = new TableColumn<>("Cost");
-        costCol.setCellValueFactory(cellData -> Bindings.createStringBinding(() -> {
-            Double value = cellData.getValue().getCost();
-            return value == null ? "" : String.format("$%.2f", value);
-        }));
-        table.getColumns().clear();
-        table.getColumns().addAll(List.of(dateCol, mileageCol, descriptionCol, byCol, costCol));
-
-        VBox printable = new VBox(12, title, subtitle, printed, info, table);
-        printable.setPadding(new Insets(16));
-        printable.setStyle("-fx-background-color: white;");
-        return printable;
     }
 
     @FXML
@@ -1295,9 +1166,15 @@ public class AdminController {
         issueAvailableTable.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
         issueSelectedTable.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
 
-        issueSearchField.textProperty().addListener((obs, oldValue, newValue) -> applyIssueAvailableFilter());
+        issueSearchField.textProperty().addListener((obs, oldValue, newValue) ->
+                IssueWorkflowSupport.applyIssueAvailableFilter(issueAvailableFiltered, issueSearchField.getText()));
         issueOfficerCombo.valueProperty().addListener((obs, oldOfficer, newOfficer) -> {
-            clearPendingChanges();
+            IssueWorkflowSupport.clearPendingChanges(
+                    pendingIssueItemsById,
+                    pendingIssuedRowsByItemId,
+                    pendingReturnRowsByIssuanceId,
+                    pendingReturnIssuanceIds
+            );
             refreshIssueOptions();
             refreshIssuedItemsForOfficer();
         });
@@ -1323,10 +1200,8 @@ public class AdminController {
 
         issueSelectedNameColumn.setCellValueFactory(new PropertyValueFactory<>("itemName"));
         issueSelectedCategoryColumn.setCellValueFactory(new PropertyValueFactory<>("categorySummary"));
-        issueSelectedSerialColumn.setCellValueFactory(cellData -> Bindings.createStringBinding(() -> {
-            String serial = cellData.getValue().getSerialNumber();
-            return serial == null ? "" : serial;
-        }));
+        issueSelectedSerialColumn.setCellValueFactory(new PropertyValueFactory<>("serialOrQty"));
+        issueSelectedSerialColumn.setText("Serial / Qty");
     }
 
     private void setupFilters() {
@@ -1335,11 +1210,281 @@ public class AdminController {
                 EquipmentStatus.AVAILABLE.name(),
                 EquipmentStatus.ISSUED.name(),
                 EquipmentStatus.MAINTENANCE.name(),
-                EquipmentStatus.RETIRED.name()
+            EquipmentStatus.RETIRED.name(),
+            EquipmentStatus.DESTROYED.name()
         ));
         inventoryStatusFilterCombo.getSelectionModel().select("All");
         inventorySearchField.textProperty().addListener((obs, o, n) -> refreshEquipmentAndIssueOptions());
         inventoryStatusFilterCombo.valueProperty().addListener((obs, o, n) -> refreshEquipmentAndIssueOptions());
+        if (inventoryHistoricalItemsCheckBox != null) {
+            inventoryHistoricalItemsCheckBox.setSelected(false);
+            inventoryHistoricalItemsCheckBox.selectedProperty().addListener((obs, oldValue, newValue) -> refreshEquipmentAndIssueOptions());
+        }
+    }
+
+    private void setupAddEquipmentPage() {
+        if (addEqBranchCombo == null) {
+            return;
+        }
+
+        addEqBranchCombo.setItems(FXCollections.observableArrayList(EquipmentBranch.values()));
+        addEqConditionCombo.setItems(FXCollections.observableArrayList(EquipmentCondition.values()));
+        addEqStatusCombo.setItems(FXCollections.observableArrayList(EquipmentStatus.values()));
+
+        addEqTypeCombo.setEditable(true);
+        addEqWeaponTypeCombo.setEditable(true);
+        addEqCaliberCombo.setEditable(true);
+        addEqSizeCombo.setEditable(true);
+        addEqStorageCombo.setEditable(true);
+        enableLookupTypeAhead(addEqTypeCombo);
+        enableLookupTypeAhead(addEqWeaponTypeCombo);
+        enableLookupTypeAhead(addEqCaliberCombo);
+        enableLookupTypeAhead(addEqSizeCombo);
+        enableLookupTypeAhead(addEqStorageCombo);
+
+        addEqBranchCombo.valueProperty().addListener((obs, oldValue, newValue) -> {
+            refreshAddEquipmentTypeOptions(newValue);
+            applyAddEquipmentBranchState(newValue);
+            refreshAddEquipmentGeneratedName();
+        });
+
+        addEqMakeField.textProperty().addListener((obs, oldValue, newValue) -> refreshAddEquipmentGeneratedName());
+        addEqModelField.textProperty().addListener((obs, oldValue, newValue) -> refreshAddEquipmentGeneratedName());
+        addEqTypeCombo.getEditor().textProperty().addListener((obs, oldValue, newValue) -> refreshAddEquipmentGeneratedName());
+        addEqWeaponTypeCombo.getEditor().textProperty().addListener((obs, oldValue, newValue) -> refreshAddEquipmentGeneratedName());
+        addEqCaliberCombo.getEditor().textProperty().addListener((obs, oldValue, newValue) -> refreshAddEquipmentGeneratedName());
+        addEqSizeCombo.getEditor().textProperty().addListener((obs, oldValue, newValue) -> refreshAddEquipmentGeneratedName());
+        addEqTypeCombo.valueProperty().addListener((obs, oldValue, newValue) -> refreshAddEquipmentGeneratedName());
+        addEqWeaponTypeCombo.valueProperty().addListener((obs, oldValue, newValue) -> refreshAddEquipmentGeneratedName());
+        addEqCaliberCombo.valueProperty().addListener((obs, oldValue, newValue) -> refreshAddEquipmentGeneratedName());
+        addEqSizeCombo.valueProperty().addListener((obs, oldValue, newValue) -> refreshAddEquipmentGeneratedName());
+
+        showAddEquipmentPage(false);
+    }
+
+    private void showAddEquipmentPage(boolean show) {
+        if (inventoryAddPagePane == null || inventoryListCard == null) {
+            return;
+        }
+
+        if (inventoryHeaderRow != null) {
+            UiNavSupport.setPaneVisible(inventoryHeaderRow, !show);
+        }
+        if (inventoryFiltersCard != null) {
+            UiNavSupport.setPaneVisible(inventoryFiltersCard, !show);
+        }
+        UiNavSupport.setPaneVisible(inventoryAddPagePane, show);
+        UiNavSupport.setPaneVisible(inventoryListCard, !show);
+
+        if (!show) {
+            return;
+        }
+
+        addEqBranchCombo.getSelectionModel().select(activeEquipmentBranch);
+        refreshAddEquipmentTypeOptions(addEqBranchCombo.getValue());
+
+        addEqWeaponTypeCombo.setItems(FXCollections.observableArrayList(lookupDao.findAll(LookupCategory.WEAPON_TYPES)));
+        addEqCaliberCombo.setItems(FXCollections.observableArrayList(lookupDao.findAll(LookupCategory.CALIBERS)));
+        addEqSizeCombo.setItems(FXCollections.observableArrayList(lookupDao.findAll(LookupCategory.UNIFORM_SIZES)));
+        addEqStorageCombo.setItems(FXCollections.observableArrayList(lookupDao.findAll(LookupCategory.STORAGE_LOCATIONS)));
+
+        addEqMakeField.setText("");
+        addEqModelField.setText("");
+        addEqNameField.setText("");
+        addEqSerialsArea.setText("");
+        addEqQuantityField.setText("1");
+        addEqSerialPrefixField.setText("");
+        addEqReplacementCostField.setText("");
+        addEqAttachmentCheck.setSelected(false);
+
+        addEqTypeCombo.getSelectionModel().clearSelection();
+        addEqWeaponTypeCombo.getSelectionModel().clearSelection();
+        addEqCaliberCombo.getSelectionModel().clearSelection();
+        addEqSizeCombo.getSelectionModel().clearSelection();
+        addEqStorageCombo.getSelectionModel().selectFirst();
+
+        addEqConditionCombo.getSelectionModel().select(EquipmentCondition.GOOD);
+        addEqStatusCombo.getSelectionModel().select(EquipmentStatus.AVAILABLE);
+
+        applyAddEquipmentBranchState(addEqBranchCombo.getValue());
+        refreshAddEquipmentGeneratedName();
+    }
+
+    private void refreshAddEquipmentTypeOptions(EquipmentBranch branch) {
+        LookupCategory category = branch == EquipmentBranch.UNIFORM
+                ? LookupCategory.UNIFORM_ITEMS
+                : LookupCategory.EQUIPMENT_TYPES;
+        addEqTypeCombo.setItems(FXCollections.observableArrayList(lookupDao.findAll(category)));
+        addEqTypeCombo.getSelectionModel().clearSelection();
+    }
+
+    private void applyAddEquipmentBranchState(EquipmentBranch branch) {
+        boolean weapon = branch == EquipmentBranch.WEAPON;
+        boolean uniform = branch == EquipmentBranch.UNIFORM;
+        boolean equipment = branch == EquipmentBranch.EQUIPMENT;
+
+        addEqTypeCombo.setDisable(weapon);
+        addEqWeaponTypeCombo.setDisable(!weapon);
+        addEqCaliberCombo.setDisable(!weapon);
+        addEqSizeCombo.setDisable(!uniform);
+        addEqAttachmentCheck.setDisable(!equipment);
+        if (!equipment) {
+            addEqAttachmentCheck.setSelected(false);
+        }
+
+        addEqSerialsArea.setDisable(uniform);
+        addEqQuantityField.setDisable(!uniform);
+        addEqSerialPrefixField.setDisable(!uniform);
+
+        if (addEqCategoryRow != null) {
+            UiNavSupport.setPaneVisible(addEqCategoryRow, !weapon);
+        }
+        if (addEqWeaponRow != null) {
+            UiNavSupport.setPaneVisible(addEqWeaponRow, weapon);
+        }
+        if (addEqUniformSizeRow != null) {
+            UiNavSupport.setPaneVisible(addEqUniformSizeRow, uniform);
+        }
+        if (addEqAttachmentRow != null) {
+            UiNavSupport.setPaneVisible(addEqAttachmentRow, equipment);
+        }
+        if (addEqSerialsSection != null) {
+            UiNavSupport.setPaneVisible(addEqSerialsSection, !uniform);
+        }
+        if (addEqUniformSection != null) {
+            UiNavSupport.setPaneVisible(addEqUniformSection, uniform);
+        }
+
+        if (weapon) {
+            addEqTypeCombo.getSelectionModel().clearSelection();
+            addEqTypeCombo.getEditor().clear();
+            addEqSizeCombo.getSelectionModel().clearSelection();
+            addEqSizeCombo.getEditor().clear();
+        }
+        if (uniform) {
+            addEqWeaponTypeCombo.getSelectionModel().clearSelection();
+            addEqWeaponTypeCombo.getEditor().clear();
+            addEqCaliberCombo.getSelectionModel().clearSelection();
+            addEqCaliberCombo.getEditor().clear();
+            addEqSerialsArea.clear();
+        }
+        if (equipment) {
+            addEqWeaponTypeCombo.getSelectionModel().clearSelection();
+            addEqWeaponTypeCombo.getEditor().clear();
+            addEqCaliberCombo.getSelectionModel().clearSelection();
+            addEqCaliberCombo.getEditor().clear();
+            addEqSizeCombo.getSelectionModel().clearSelection();
+            addEqSizeCombo.getEditor().clear();
+            addEqQuantityField.setText("1");
+            addEqSerialPrefixField.clear();
+        }
+    }
+
+    private void refreshAddEquipmentGeneratedName() {
+        if (addEqNameField == null || !text(addEqNameField).isEmpty()) {
+            return;
+        }
+
+        EquipmentBranch branch = addEqBranchCombo.getValue();
+        addEqNameField.setText(buildGeneratedEquipmentName(
+                text(addEqMakeField),
+                text(addEqModelField),
+                branch,
+                selectedName(addEqTypeCombo),
+                selectedName(addEqWeaponTypeCombo),
+                selectedName(addEqCaliberCombo),
+                selectedName(addEqSizeCombo)
+        ));
+    }
+
+    private EquipmentFormData buildAddEquipmentPageFormData() {
+        EquipmentBranch branch = addEqBranchCombo.getValue();
+        if (branch == null) {
+            UiAlerts.error("Equipment", "Branch is required.");
+            return null;
+        }
+
+        Double replacementCost;
+        String replacementCostText = text(addEqReplacementCostField);
+        if (replacementCostText.isEmpty()) {
+            UiAlerts.error("Equipment", "Replacement cost is required.");
+            return null;
+        }
+        try {
+            replacementCost = Double.parseDouble(replacementCostText);
+            if (replacementCost < 0) {
+                UiAlerts.error("Equipment", "Replacement cost cannot be negative.");
+                return null;
+            }
+        } catch (NumberFormatException ex) {
+            UiAlerts.error("Equipment", "Replacement cost must be numeric.");
+            return null;
+        }
+
+        Integer quantity = null;
+        if (branch == EquipmentBranch.UNIFORM) {
+            try {
+                quantity = Integer.parseInt(text(addEqQuantityField));
+                if (quantity <= 0) {
+                    UiAlerts.error("Equipment", "Uniform quantity must be greater than zero.");
+                    return null;
+                }
+            } catch (NumberFormatException ex) {
+                UiAlerts.error("Equipment", "Uniform quantity must be a whole number.");
+                return null;
+            }
+        }
+
+        List<String> serials = parseSerials(addEqSerialsArea);
+        if (branch != EquipmentBranch.UNIFORM && serials.isEmpty()) {
+            UiAlerts.error("Equipment", "Enter at least one serial number to add inventory in bulk.");
+            return null;
+        }
+
+        String effectiveName = text(addEqNameField);
+        if (effectiveName.isEmpty()) {
+            effectiveName = buildGeneratedEquipmentName(
+                    text(addEqMakeField),
+                    text(addEqModelField),
+                    branch,
+                    selectedName(addEqTypeCombo),
+                    selectedName(addEqWeaponTypeCombo),
+                    selectedName(addEqCaliberCombo),
+                    selectedName(addEqSizeCombo)
+            );
+        }
+        if (effectiveName.isEmpty()) {
+            UiAlerts.error("Equipment", "Name is required.");
+            return null;
+        }
+
+        EquipmentCondition condition = addEqConditionCombo.getValue();
+        EquipmentStatus status = addEqStatusCombo.getValue();
+        if (condition == null || status == null) {
+            UiAlerts.error("Equipment", "Condition and status are required.");
+            return null;
+        }
+
+        Integer effectiveEquipmentTypeId = branch == EquipmentBranch.WEAPON ? null : selectedId(addEqTypeCombo);
+        String effectiveEquipmentTypeName = branch == EquipmentBranch.WEAPON ? null : selectedName(addEqTypeCombo);
+
+        return new EquipmentFormData(
+                effectiveName,
+                branch,
+                effectiveEquipmentTypeId, effectiveEquipmentTypeName,
+                selectedId(addEqWeaponTypeCombo), selectedName(addEqWeaponTypeCombo),
+                selectedId(addEqCaliberCombo), selectedName(addEqCaliberCombo),
+                selectedId(addEqSizeCombo), selectedName(addEqSizeCombo),
+                selectedId(addEqStorageCombo), selectedName(addEqStorageCombo),
+                "",
+                serials,
+                quantity,
+                text(addEqSerialPrefixField),
+                replacementCost,
+                condition,
+                status,
+                branch == EquipmentBranch.EQUIPMENT && addEqAttachmentCheck.isSelected()
+        );
     }
 
     private void setupLookupAdmin() {
@@ -1387,6 +1532,7 @@ public class AdminController {
                     case "ISSUED" -> getStyleClass().add("status-issued");
                     case "MAINTENANCE" -> getStyleClass().add("status-maintenance");
                     case "RETIRED" -> getStyleClass().add("status-retired");
+                    case "DESTROYED" -> getStyleClass().add("status-retired");
                     default -> {
                     }
                 }
@@ -1497,7 +1643,12 @@ public class AdminController {
         refreshEquipmentAndIssueOptions();
         refreshIssueOptions();
         refreshIssuances();
-        refreshVehiclesAndMaintenanceOptions();
+        FleetViewSupport.refreshVehiclesAndMaintenanceOptions(
+            vehicleDao,
+            vehiclesTable,
+            maintenanceVehicleCombo,
+            this::onMaintenanceVehicleChanged
+        );
     }
 
     private void loadAgencySettings() {
@@ -1612,152 +1763,18 @@ public class AdminController {
             return;
         }
 
-        VBox printable = buildEquipmentHistoryPrintableNode(item, history);
+        VBox printable = PrintNodeFactory.buildEquipmentHistoryPrintableNode(getAgencyName(), item, history);
         Window owner = moduleInventoryPane != null && moduleInventoryPane.getScene() != null
                 ? moduleInventoryPane.getScene().getWindow()
                 : null;
-        printNode(owner, printable);
+        JavaFxPrintSupport.printNode(owner, printable);
     }
 
     private boolean openEquipmentHistoryPrintPreview(EquipmentItem item, List<IssuanceAdminRow> history) {
-        try {
-            if (!Desktop.isDesktopSupported()) {
-                return false;
-            }
-            Desktop desktop = Desktop.getDesktop();
-            if (!desktop.isSupported(Desktop.Action.BROWSE)) {
-                return false;
-            }
-            Path tempHtml = Files.createTempFile("quartermaster-item-history-", ".html");
-            Files.writeString(tempHtml, buildEquipmentHistoryHtml(item, history), StandardCharsets.UTF_8);
-            tempHtml.toFile().deleteOnExit();
-            desktop.browse(tempHtml.toUri());
-            return true;
-        } catch (IOException ex) {
-            ex.printStackTrace();
-            UiAlerts.error("Print Preview", "Could not open Windows print preview. Falling back to print dialog.");
-            return false;
-        }
-    }
-
-    private String buildEquipmentHistoryHtml(EquipmentItem item, List<IssuanceAdminRow> history) {
-        String agencyName = getAgencyName();
-        String printedAt = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
-        StringBuilder rows = new StringBuilder();
-        for (IssuanceAdminRow row : history) {
-            rows.append("<tr>")
-                    .append("<td>").append(escapeHtml(row.getOfficerName())).append("</td>")
-                    .append("<td>").append(escapeHtml(row.getIssuedByUsername())).append("</td>")
-                    .append("<td>").append(escapeHtml(row.getIssuedDate() == null ? "" : row.getIssuedDate().toString())).append("</td>")
-                    .append("<td>").append(escapeHtml(row.getReturnedByUsername())).append("</td>")
-                    .append("<td>").append(escapeHtml(row.getReturnedDate() == null ? "" : row.getReturnedDate().toString())).append("</td>")
-                    .append("</tr>");
-        }
-
-        return """
-                <!doctype html>
-                <html lang=\"en\">
-                <head>
-                  <meta charset=\"utf-8\" />
-                  <title>Equipment History</title>
-                  <style>
-                    body { font-family: Segoe UI, Tahoma, Arial, sans-serif; margin: 20px; color: #111; }
-                    h1 { margin: 0; font-size: 28px; }
-                    h2 { margin: 6px 0 14px 0; font-size: 20px; }
-                    .meta { margin: 4px 0; font-size: 14px; }
-                    table { width: 100%%; border-collapse: collapse; margin-top: 12px; }
-                    th, td { border: 1px solid #444; padding: 8px; text-align: left; font-size: 13px; }
-                    th { background: #efefef; }
-                  </style>
-                </head>
-                <body onload=\"setTimeout(function(){ window.print(); }, 200);\">
-                  <h1>%s</h1>
-                  <h2>Equipment Item History</h2>
-                  <div class=\"meta\"><strong>Printed:</strong> %s</div>
-                  <div class=\"meta\"><strong>Item:</strong> %s</div>
-                  <div class=\"meta\"><strong>Category:</strong> %s</div>
-                  <div class=\"meta\"><strong>Serial:</strong> %s</div>
-                  <div class=\"meta\"><strong>Replacement Cost:</strong> %s</div>
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Issued To</th>
-                        <th>Issued By</th>
-                        <th>Issued Date</th>
-                        <th>Returned By</th>
-                        <th>Returned Date</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      %s
-                    </tbody>
-                  </table>
-                                    <p style=\"margin-top: 14px; font-size: 12px;\"><strong>Officer Responsibility:</strong> Officers are responsible for all issued items. Lost or damaged items will be replaced at the listed replacement cost.</p>
-                </body>
-                </html>
-                """.formatted(
-                escapeHtml(agencyName),
-                escapeHtml(printedAt),
-                escapeHtml(item.getName()),
-                escapeHtml(item.getCategorySummary()),
-                escapeHtml(item.getSerialNumber()),
-                                escapeHtml(item.getReplacementCost() == null ? "" : String.format("$%.2f", item.getReplacementCost())),
-                rows
+        return WindowsPrintPreview.openHtml(
+                "quartermaster-item-history-",
+                                PrintHtmlFactory.buildEquipmentHistoryHtml(getAgencyName(), item, history)
         );
-    }
-
-    private VBox buildEquipmentHistoryPrintableNode(EquipmentItem item, List<IssuanceAdminRow> history) {
-        Label title = new Label(getAgencyName());
-        title.setStyle("-fx-font-size: 22px; -fx-font-weight: 700; -fx-text-fill: black;");
-        Label subtitle = new Label("Equipment Item History");
-        subtitle.setStyle("-fx-font-size: 18px; -fx-font-weight: 700; -fx-text-fill: black;");
-        Label printed = new Label("Printed: " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")));
-        printed.setStyle("-fx-text-fill: #333333;");
-
-        GridPane info = new GridPane();
-        info.setHgap(16);
-        info.setVgap(8);
-        info.add(new Label("Item"), 0, 0);
-        info.add(new Label(item.getName()), 1, 0);
-        info.add(new Label("Category"), 0, 1);
-        info.add(new Label(item.getCategorySummary()), 1, 1);
-        info.add(new Label("Serial"), 0, 2);
-        info.add(new Label(item.getSerialNumber() == null ? "" : item.getSerialNumber()), 1, 2);
-        info.add(new Label("Replacement Cost"), 0, 3);
-        info.add(new Label(item.getReplacementCost() == null ? "" : String.format("$%.2f", item.getReplacementCost())), 1, 3);
-
-        TableView<IssuanceAdminRow> table = new TableView<>(FXCollections.observableArrayList(history));
-        table.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
-        table.setPrefHeight(Math.min(520, 160 + history.size() * 26.0));
-
-        TableColumn<IssuanceAdminRow, String> issuedToCol = new TableColumn<>("Issued To");
-        issuedToCol.setCellValueFactory(new PropertyValueFactory<>("officerName"));
-        TableColumn<IssuanceAdminRow, String> issuedByCol = new TableColumn<>("Issued By");
-        issuedByCol.setCellValueFactory(new PropertyValueFactory<>("issuedByUsername"));
-        TableColumn<IssuanceAdminRow, String> issuedDateCol = new TableColumn<>("Issued Date");
-        issuedDateCol.setCellValueFactory(cellData -> Bindings.createStringBinding(
-                () -> cellData.getValue().getIssuedDate() == null ? "" : cellData.getValue().getIssuedDate().toString()
-        ));
-        TableColumn<IssuanceAdminRow, String> returnedByCol = new TableColumn<>("Returned By");
-        returnedByCol.setCellValueFactory(cellData -> Bindings.createStringBinding(() -> {
-            String value = cellData.getValue().getReturnedByUsername();
-            return value == null ? "" : value;
-        }));
-        TableColumn<IssuanceAdminRow, String> returnedDateCol = new TableColumn<>("Returned Date");
-        returnedDateCol.setCellValueFactory(cellData -> Bindings.createStringBinding(
-                () -> cellData.getValue().getReturnedDate() == null ? "" : cellData.getValue().getReturnedDate().toString()
-        ));
-        table.getColumns().clear();
-        table.getColumns().addAll(List.of(issuedToCol, issuedByCol, issuedDateCol, returnedByCol, returnedDateCol));
-
-        Label responsibility = new Label("Officer Responsibility: Officers are responsible for all issued items. Lost or damaged items will be replaced at the listed replacement cost.");
-        responsibility.setWrapText(true);
-        responsibility.setStyle("-fx-font-size: 12px; -fx-text-fill: black;");
-
-        VBox printable = new VBox(12, title, subtitle, printed, info, table, responsibility);
-        printable.setPadding(new Insets(16));
-        printable.setStyle("-fx-background-color: white;");
-        return printable;
     }
 
     private void refreshOfficers() {
@@ -1773,12 +1790,15 @@ public class AdminController {
 
     private void refreshEquipmentAndIssueOptions() {
         List<EquipmentItem> byBranch = equipmentDao.findByBranch(activeEquipmentBranch);
+        boolean showHistorical = inventoryHistoricalItemsCheckBox != null && inventoryHistoricalItemsCheckBox.isSelected();
+        String selectedStatus = inventoryStatusFilterCombo.getSelectionModel().getSelectedItem();
+        String query = inventorySearchField.getText();
         List<EquipmentItem> filtered = byBranch.stream()
-                .filter(this::matchesInventoryFilter)
+            .filter(item -> InventoryViewSupport.matchesInventoryFilter(item, showHistorical, selectedStatus, query))
                 .collect(Collectors.toList());
 
         equipmentTable.setItems(FXCollections.observableArrayList(filtered));
-        inventorySummaryLabel.setText(buildInventorySummaryText(filtered, byBranch.size()));
+        inventorySummaryLabel.setText(InventoryViewSupport.buildInventorySummaryText(filtered, byBranch.size(), activeEquipmentBranch));
 
         boolean weaponView = activeEquipmentBranch == EquipmentBranch.WEAPON;
         attachItemButton.setVisible(weaponView);
@@ -1789,25 +1809,6 @@ public class AdminController {
         refreshIssueOptions();
     }
 
-    private String buildInventorySummaryText(List<EquipmentItem> filtered, int byBranchTotal) {
-        String base = "Showing " + filtered.size() + " of " + byBranchTotal + " items";
-        if (activeEquipmentBranch != EquipmentBranch.UNIFORM) {
-            return base;
-        }
-
-        Map<String, Long> grouped = filtered.stream()
-                .collect(Collectors.groupingBy(EquipmentItem::getCategorySummary, Collectors.counting()));
-        if (grouped.isEmpty()) {
-            return base;
-        }
-
-        String breakdown = grouped.entrySet().stream()
-                .sorted(Map.Entry.comparingByKey(String.CASE_INSENSITIVE_ORDER))
-                .map(entry -> entry.getKey() + " x" + entry.getValue())
-                .collect(Collectors.joining(" | "));
-        return base + "\nUniform counts: " + breakdown;
-    }
-
     private void refreshIssueOptions() {
         List<EquipmentItem> available = equipmentDao.findAll().stream()
                 .filter(item -> item.getStatus() == EquipmentStatus.AVAILABLE)
@@ -1816,12 +1817,12 @@ public class AdminController {
                 .collect(Collectors.toList());
 
         for (IssuedItemRow pendingReturn : pendingReturnRowsByIssuanceId.values()) {
-            available.add(toPendingAvailablePlaceholder(pendingReturn));
+            available.add(IssueWorkflowSupport.toPendingAvailablePlaceholder(pendingReturn));
         }
         available.sort(Comparator.comparing(EquipmentItem::getName, String.CASE_INSENSITIVE_ORDER));
 
         issueAvailableSource.setAll(available);
-        applyIssueAvailableFilter();
+        IssueWorkflowSupport.applyIssueAvailableFilter(issueAvailableFiltered, issueSearchField.getText());
     }
 
     private void refreshIssuedItemsForOfficer() {
@@ -1834,19 +1835,6 @@ public class AdminController {
         issued.removeIf(row -> pendingReturnIssuanceIds.contains(row.getIssuanceId()));
         issued.addAll(pendingIssuedRowsByItemId.values());
         issuedToOfficerItems.setAll(issued);
-    }
-
-    private void applyIssueAvailableFilter() {
-        String query = issueSearchField.getText() == null ? "" : issueSearchField.getText().trim().toLowerCase();
-        issueAvailableFiltered.setPredicate(item -> {
-            if (query.isEmpty()) {
-                return true;
-            }
-            String serial = item.getSerialNumber() == null ? "" : item.getSerialNumber().toLowerCase();
-            return item.getName().toLowerCase().contains(query)
-                    || item.getCategorySummary().toLowerCase().contains(query)
-                    || serial.contains(query);
-        });
     }
 
     private void refreshIssuances() {
@@ -1863,483 +1851,57 @@ public class AdminController {
                         return;
                 }
 
-        VBox printable = buildIssuancePrintableNode(officer, currentIssued, returnedItems);
+        String adminName = SessionManager.getCurrentUser() == null
+            ? ""
+            : SessionManager.getCurrentUser().getUsername();
+        VBox printable = PrintNodeFactory.buildIssuancePrintableNode(
+            getAgencyName(),
+            adminName,
+            officer,
+            currentIssued,
+            returnedItems
+        );
         Window owner = moduleIssuePane != null && moduleIssuePane.getScene() != null
                 ? moduleIssuePane.getScene().getWindow()
                 : null;
-        printNode(owner, printable);
+        JavaFxPrintSupport.printNode(owner, printable);
     }
 
         private boolean openWindowsPrintPreview(Officer officer, List<IssuedItemRow> currentIssued,
                             List<IssuedItemRow> returnedItems) {
-                try {
-                        if (!Desktop.isDesktopSupported()) {
-                                return false;
-                        }
-                        Desktop desktop = Desktop.getDesktop();
-                        if (!desktop.isSupported(Desktop.Action.BROWSE)) {
-                                return false;
-                        }
-
-                        Path tempHtml = Files.createTempFile("quartermaster-signoff-", ".html");
-            Files.writeString(tempHtml, buildIssuancePrintHtml(officer, currentIssued, returnedItems), StandardCharsets.UTF_8);
-                        tempHtml.toFile().deleteOnExit();
-                        desktop.browse(tempHtml.toUri());
-                        return true;
-                } catch (IOException ex) {
-                        ex.printStackTrace();
-                        UiAlerts.error("Print Preview", "Could not open Windows print preview. Falling back to print dialog.");
-                        return false;
-                }
+            String adminName = SessionManager.getCurrentUser() == null
+                    ? ""
+                    : SessionManager.getCurrentUser().getUsername();
+            return WindowsPrintPreview.openHtml(
+                "quartermaster-signoff-",
+                PrintHtmlFactory.buildIssuancePrintHtml(getAgencyName(), adminName, officer, currentIssued, returnedItems)
+            );
         }
-
-            private String buildIssuancePrintHtml(Officer officer, List<IssuedItemRow> currentIssued,
-                                  List<IssuedItemRow> returnedItems) {
-                String agencyName = getAgencyName();
-                String adminName = SessionManager.getCurrentUser() == null
-                                ? ""
-                                : SessionManager.getCurrentUser().getUsername();
-                String printedAt = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
-
-                StringBuilder rows = new StringBuilder();
-                for (IssuedItemRow row : currentIssued) {
-                        String issuedDate = row.getIssuedDate() == null ? "" : row.getIssuedDate().toString();
-                    String replacementCost = row.getReplacementCost() == null
-                            ? ""
-                            : String.format("$%.2f", row.getReplacementCost());
-                        rows.append("<tr>")
-                                        .append("<td>").append(escapeHtml(row.getItemName())).append("</td>")
-                                        .append("<td>").append(escapeHtml(row.getCategorySummary())).append("</td>")
-                                        .append("<td>").append(escapeHtml(row.getSerialNumber())).append("</td>")
-                            .append("<td>").append(escapeHtml(replacementCost)).append("</td>")
-                                        .append("<td>").append(escapeHtml(issuedDate)).append("</td>")
-                                        .append("</tr>");
-                }
-
-                StringBuilder returnedRows = new StringBuilder();
-                if (returnedItems != null) {
-                        for (IssuedItemRow row : returnedItems) {
-                                String issuedDate = row.getIssuedDate() == null ? "" : row.getIssuedDate().toString();
-                            String replacementCost = row.getReplacementCost() == null
-                                    ? ""
-                                    : String.format("$%.2f", row.getReplacementCost());
-                                returnedRows.append("<tr>")
-                                                .append("<td>").append(escapeHtml(row.getItemName())).append("</td>")
-                                                .append("<td>").append(escapeHtml(row.getCategorySummary())).append("</td>")
-                                                .append("<td>").append(escapeHtml(row.getSerialNumber())).append("</td>")
-                                    .append("<td>").append(escapeHtml(replacementCost)).append("</td>")
-                                                .append("<td>").append(escapeHtml(issuedDate)).append("</td>")
-                                                .append("</tr>");
-                        }
-                }
-
-                String returnedSection = returnedRows.isEmpty()
-                                ? ""
-                                : """
-                                    <h2 style=\"margin-top: 20px; margin-bottom: 6px; font-size: 20px;\">Returned Items (This Save)</h2>
-                                    <table>
-                                        <thead>
-                                            <tr>
-                                                <th>Name</th>
-                                                <th>Category</th>
-                                                <th>Serial</th>
-                                                <th>Replacement Cost</th>
-                                                <th>Originally Issued</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            %s
-                                        </tbody>
-                                    </table>
-                                """.formatted(returnedRows);
-
-                return """
-                                <!doctype html>
-                                <html lang=\"en\">
-                                <head>
-                                    <meta charset=\"utf-8\" />
-                                    <title>%s - Officer Equipment Sign-Off</title>
-                                    <style>
-                                        body { font-family: Segoe UI, Tahoma, Arial, sans-serif; margin: 20px; color: #111; }
-                                        h1 { margin: 0; font-size: 28px; }
-                                        h2 { margin: 6px 0 10px 0; font-size: 20px; }
-                                        .meta { margin: 4px 0; font-size: 14px; }
-                                        table { width: 100%%; border-collapse: collapse; margin-top: 12px; }
-                                        th, td { border: 1px solid #444; padding: 8px; text-align: left; font-size: 13px; }
-                                        th { background: #efefef; }
-                                        .sign { margin-top: 24px; font-size: 16px; }
-                                        @media print {
-                                            body { margin: 14px; }
-                                        }
-                                    </style>
-                                </head>
-                                <body onload=\"setTimeout(function(){ window.print(); }, 200);\">
-                                    <h1>%s</h1>
-                                    <h2>Equipment Issue / Return Sign-Off</h2>
-                                    <div class=\"meta\"><strong>Printed:</strong> %s</div>
-                                    <div class=\"meta\"><strong>Officer:</strong> %s (%s)</div>
-                                    <div class=\"meta\"><strong>Prepared By:</strong> %s</div>
-                                    <div class=\"meta\"><strong>Issued Items:</strong> %s</div>
-                                    <div class=\"meta\"><strong>Returned Items:</strong> %s</div>
-                                    <h2 style=\"margin-top: 16px; margin-bottom: 6px; font-size: 20px;\">Currently Issued</h2>
-                                    <table>
-                                        <thead>
-                                            <tr>
-                                                <th>Name</th>
-                                                <th>Category</th>
-                                                <th>Serial</th>
-                                                <th>Replacement Cost</th>
-                                                <th>Issued Date</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            %s
-                                        </tbody>
-                                    </table>
-                                    %s
-                                    <div class=\"sign\">Issued By (%s): ________________________________</div>
-                                    <div class=\"sign\">Officer Signature (%s): ________________________________</div>
-                                    <p style="margin-top: 14px; font-size: 12px;"><strong>Officer Responsibility:</strong> Officers are responsible for all issued items. Lost or damaged items will be replaced at the listed replacement cost.</p>
-                                </body>
-                                </html>
-                                """.formatted(
-                                escapeHtml(agencyName),
-                                escapeHtml(agencyName),
-                                escapeHtml(printedAt),
-                                escapeHtml(officer.getName()),
-                                escapeHtml(officer.getBadgeNumber()),
-                                escapeHtml(adminName),
-                                currentIssued.size(),
-                                returnedItems == null ? 0 : returnedItems.size(),
-                                rows,
-                                returnedSection,
-                                escapeHtml(adminName),
-                                escapeHtml(officer.getName())
-                );
-        }
-
-        private String escapeHtml(String value) {
-                if (value == null) {
-                        return "";
-                }
-                return value
-                                .replace("&", "&amp;")
-                                .replace("<", "&lt;")
-                                .replace(">", "&gt;")
-                                .replace("\"", "&quot;")
-                                .replace("'", "&#39;");
-        }
-
-                    private void stageIssue(EquipmentItem item) {
-                        pendingIssueItemsById.put(item.getItemId(), item);
-                        IssuedItemRow staged = new IssuedItemRow(
-                                -item.getItemId(),
-                                item.getName(),
-                                item.getBranch(),
-                                item.getCategorySummary(),
-                                item.getSerialNumber(),
-                            item.getReplacementCost(),
-                                issueDatePicker.getValue() == null ? LocalDate.now() : issueDatePicker.getValue(),
-                                null
-                        );
-                        pendingIssuedRowsByItemId.put(item.getItemId(), staged);
-                        issueAvailableSource.remove(item);
-                        issuedToOfficerItems.add(staged);
-                    }
-
-                    private void cancelStagedIssue(int stagedIssuanceId) {
-                        int itemId = -stagedIssuanceId;
-                        EquipmentItem original = pendingIssueItemsById.remove(itemId);
-                        pendingIssuedRowsByItemId.remove(itemId);
-
-                        issuedToOfficerItems.removeIf(row -> row.getIssuanceId() == stagedIssuanceId);
-                        if (original != null) {
-                            issueAvailableSource.add(original);
-                            sortIssueAvailableSource();
-                        }
-                    }
-
-                    private void stageReturn(IssuedItemRow row) {
-                        pendingReturnIssuanceIds.add(row.getIssuanceId());
-                        pendingReturnRowsByIssuanceId.put(row.getIssuanceId(), row);
-                        issuedToOfficerItems.remove(row);
-                        issueAvailableSource.add(toPendingAvailablePlaceholder(row));
-                        sortIssueAvailableSource();
-                    }
-
-                    private void cancelStagedReturn(int issuanceId) {
-                        IssuedItemRow row = pendingReturnRowsByIssuanceId.remove(issuanceId);
-                        pendingReturnIssuanceIds.remove(issuanceId);
-                        issueAvailableSource.removeIf(item -> item.getItemId() == -issuanceId);
-                        if (row != null) {
-                            issuedToOfficerItems.add(row);
-                        }
-                    }
-
-                    private EquipmentItem toPendingAvailablePlaceholder(IssuedItemRow row) {
-                        return new EquipmentItem(
-                                -row.getIssuanceId(),
-                                row.getItemName(),
-                                row.getBranch(),
-                                null, null,
-                                null, null,
-                                null, null,
-                                null, null,
-                                null, null,
-                                row.getSerialNumber(),
-                                row.getReplacementCost(),
-                                EquipmentCondition.GOOD,
-                                EquipmentStatus.AVAILABLE,
-                                false
-                        );
-                    }
-
-                    private void sortIssueAvailableSource() {
-                        FXCollections.sort(issueAvailableSource, Comparator.comparing(EquipmentItem::getName, String.CASE_INSENSITIVE_ORDER));
-                    }
-
-                    private void clearPendingChanges() {
-                        pendingIssueItemsById.clear();
-                        pendingIssuedRowsByItemId.clear();
-                        pendingReturnRowsByIssuanceId.clear();
-                        pendingReturnIssuanceIds.clear();
-                    }
 
                     private Integer currentUserIdOrNull() {
                         return SessionManager.getCurrentUser() == null ? null : SessionManager.getCurrentUser().getUserId();
                     }
 
-    private VBox buildIssuancePrintableNode(Officer officer, List<IssuedItemRow> currentIssued,
-                                            List<IssuedItemRow> returnedItems) {
-        String agencyName = getAgencyName();
-        String adminName = SessionManager.getCurrentUser() == null
-                ? ""
-                : SessionManager.getCurrentUser().getUsername();
-
-        Label title = new Label(agencyName);
-        title.setStyle("-fx-font-size: 22px; -fx-font-weight: 700; -fx-text-fill: black;");
-        Label subtitle = new Label("Equipment Issue / Return Sign-Off");
-        subtitle.setStyle("-fx-font-size: 18px; -fx-font-weight: 700; -fx-text-fill: black;");
-
-        Label timestamp = new Label("Printed: " +
-                LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")));
-        timestamp.setStyle("-fx-text-fill: #333333;");
-
-        GridPane details = new GridPane();
-        details.setHgap(16);
-        details.setVgap(8);
-        details.add(new Label("Officer"), 0, 0);
-        details.add(new Label(officer.getName() + " (" + officer.getBadgeNumber() + ")"), 1, 0);
-        details.add(new Label("Prepared By"), 0, 1);
-        details.add(new Label(adminName), 1, 1);
-        details.add(new Label("Issued Items"), 0, 2);
-        details.add(new Label(String.valueOf(currentIssued.size())), 1, 2);
-        details.add(new Label("Returned Items"), 0, 3);
-        details.add(new Label(String.valueOf(returnedItems == null ? 0 : returnedItems.size())), 1, 3);
-
-        TableView<IssuedItemRow> table = new TableView<>(FXCollections.observableArrayList(currentIssued));
-        table.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
-        table.setPrefHeight(Math.min(520, 150 + currentIssued.size() * 26.0));
-
-        TableColumn<IssuedItemRow, String> nameCol = new TableColumn<>("Name");
-        nameCol.setCellValueFactory(new PropertyValueFactory<>("itemName"));
-        TableColumn<IssuedItemRow, String> categoryCol = new TableColumn<>("Category");
-        categoryCol.setCellValueFactory(new PropertyValueFactory<>("categorySummary"));
-        TableColumn<IssuedItemRow, String> serialCol = new TableColumn<>("Serial");
-        serialCol.setCellValueFactory(new PropertyValueFactory<>("serialNumber"));
-        TableColumn<IssuedItemRow, String> costCol = new TableColumn<>("Replacement Cost");
-        costCol.setCellValueFactory(cellData -> Bindings.createStringBinding(() -> {
-            Double value = cellData.getValue().getReplacementCost();
-            return value == null ? "" : String.format("$%.2f", value);
-        }));
-        TableColumn<IssuedItemRow, String> dateCol = new TableColumn<>("Issued Date");
-        dateCol.setCellValueFactory(cellData -> Bindings.createStringBinding(
-                () -> cellData.getValue().getIssuedDate() == null ? "" : cellData.getValue().getIssuedDate().toString()
-        ));
-        table.getColumns().clear();
-        table.getColumns().addAll(List.of(nameCol, categoryCol, serialCol, costCol, dateCol));
-
-        VBox returnedSection = new VBox(6);
-        if (returnedItems != null && !returnedItems.isEmpty()) {
-            Label returnedTitle = new Label("Returned Items (This Save)");
-            returnedTitle.setStyle("-fx-font-size: 16px; -fx-font-weight: 700; -fx-text-fill: black;");
-
-            TableView<IssuedItemRow> returnedTable = new TableView<>(FXCollections.observableArrayList(returnedItems));
-            returnedTable.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
-            returnedTable.setPrefHeight(Math.min(320, 120 + returnedItems.size() * 26.0));
-
-            TableColumn<IssuedItemRow, String> returnedNameCol = new TableColumn<>("Name");
-            returnedNameCol.setCellValueFactory(new PropertyValueFactory<>("itemName"));
-            TableColumn<IssuedItemRow, String> returnedCategoryCol = new TableColumn<>("Category");
-            returnedCategoryCol.setCellValueFactory(new PropertyValueFactory<>("categorySummary"));
-            TableColumn<IssuedItemRow, String> returnedSerialCol = new TableColumn<>("Serial");
-            returnedSerialCol.setCellValueFactory(new PropertyValueFactory<>("serialNumber"));
-            TableColumn<IssuedItemRow, String> returnedCostCol = new TableColumn<>("Replacement Cost");
-            returnedCostCol.setCellValueFactory(cellData -> Bindings.createStringBinding(() -> {
-                Double value = cellData.getValue().getReplacementCost();
-                return value == null ? "" : String.format("$%.2f", value);
-            }));
-            TableColumn<IssuedItemRow, String> returnedDateCol = new TableColumn<>("Originally Issued");
-            returnedDateCol.setCellValueFactory(cellData -> Bindings.createStringBinding(
-                () -> cellData.getValue().getIssuedDate() == null ? "" : cellData.getValue().getIssuedDate().toString()
-            ));
-            returnedTable.getColumns().clear();
-            returnedTable.getColumns().addAll(List.of(returnedNameCol, returnedCategoryCol, returnedSerialCol, returnedCostCol, returnedDateCol));
-
-            returnedSection.getChildren().addAll(returnedTitle, returnedTable);
-        }
-
-        Label line1 = new Label("Issued By (" + adminName + "): ________________________________");
-        line1.setStyle("-fx-font-size: 14px; -fx-text-fill: black;");
-        Label line2 = new Label("Officer Signature (" + officer.getName() + "): ________________________________");
-        line2.setStyle("-fx-font-size: 14px; -fx-text-fill: black;");
-        Label responsibility = new Label("Officer Responsibility: Officers are responsible for all issued items. Lost or damaged items will be replaced at the listed replacement cost.");
-        responsibility.setWrapText(true);
-        responsibility.setStyle("-fx-font-size: 12px; -fx-text-fill: black;");
-
-        VBox printable = new VBox(12, title, subtitle, timestamp, details, table, returnedSection, line1, line2, responsibility);
-        printable.setPadding(new Insets(16));
-        printable.setStyle("-fx-background-color: white;");
-        return printable;
-    }
-
-    private boolean printNode(Window owner, Node node) {
-        PrinterJob printerJob = PrinterJob.createPrinterJob();
-        if (printerJob == null) {
-            UiAlerts.error("Print", "No printer is available.");
-            return false;
-        }
-        if (!printerJob.showPrintDialog(owner)) {
-            return false;
-        }
-
-        Printer printer = printerJob.getPrinter();
-        PageLayout pageLayout = printer.createPageLayout(
-                Paper.NA_LETTER,
-                PageOrientation.PORTRAIT,
-                Printer.MarginType.DEFAULT
-        );
-        printerJob.getJobSettings().setPageLayout(pageLayout);
-
-        // Attach to a temporary scene to ensure CSS and layout are applied before measuring for print scale.
-        Group printRoot = new Group(node);
-        new javafx.scene.Scene(printRoot);
-        printRoot.applyCss();
-        printRoot.layout();
-
-        double width = Math.max(1, node.getLayoutBounds().getWidth());
-        double height = Math.max(1, node.getLayoutBounds().getHeight());
-        double scaleX = pageLayout.getPrintableWidth() / width;
-        double scaleY = pageLayout.getPrintableHeight() / height;
-        double scale = Math.min(1.0, Math.min(scaleX, scaleY));
-
-        Scale transform = new Scale(scale, scale);
-        node.getTransforms().add(transform);
-        boolean printed = printerJob.printPage(pageLayout, node);
-        node.getTransforms().remove(transform);
-
-        if (printed) {
-            printerJob.endJob();
-        }
-
-        printRoot.getChildren().clear();
-        return printed;
-    }
-
-    private List<EquipmentItem> selectedOrFocusedAvailableRows() {
-        List<EquipmentItem> selected = new ArrayList<>(issueAvailableTable.getSelectionModel().getSelectedItems());
-        if (!selected.isEmpty()) {
-            return selected;
-        }
-
-        EquipmentItem single = issueAvailableTable.getSelectionModel().getSelectedItem();
-        if (single != null) {
-            return List.of(single);
-        }
-
-        int focusedIndex = issueAvailableTable.getFocusModel().getFocusedIndex();
-        if (focusedIndex >= 0 && focusedIndex < issueAvailableTable.getItems().size()) {
-            EquipmentItem focused = issueAvailableTable.getItems().get(focusedIndex);
-            return focused == null ? List.of() : List.of(focused);
-        }
-        return List.of();
-    }
-
-    private List<IssuedItemRow> selectedOrFocusedIssuedRows() {
-        List<IssuedItemRow> selected = new ArrayList<>(issueSelectedTable.getSelectionModel().getSelectedItems());
-        if (!selected.isEmpty()) {
-            return selected;
-        }
-
-        IssuedItemRow single = issueSelectedTable.getSelectionModel().getSelectedItem();
-        if (single != null) {
-            return List.of(single);
-        }
-
-        int focusedIndex = issueSelectedTable.getFocusModel().getFocusedIndex();
-        if (focusedIndex >= 0 && focusedIndex < issueSelectedTable.getItems().size()) {
-            IssuedItemRow focused = issueSelectedTable.getItems().get(focusedIndex);
-            return focused == null ? List.of() : List.of(focused);
-        }
-        return List.of();
-    }
-
-    private void refreshVehiclesAndMaintenanceOptions() {
-        List<Vehicle> vehicles = vehicleDao.findAll();
-        ObservableList<Vehicle> list = FXCollections.observableArrayList(vehicles);
-        vehiclesTable.setItems(list);
-
-        Vehicle previous = maintenanceVehicleCombo.getSelectionModel().getSelectedItem();
-        maintenanceVehicleCombo.setItems(list);
-        if (previous != null) {
-            maintenanceVehicleCombo.getSelectionModel().select(
-                    vehicles.stream()
-                            .filter(v -> v.getVehicleId() == previous.getVehicleId())
-                            .findFirst()
-                            .orElse(null)
-            );
-        }
-        onMaintenanceVehicleChanged();
-    }
-
-    private boolean matchesInventoryFilter(EquipmentItem item) {
-        String selectedStatus = inventoryStatusFilterCombo.getSelectionModel().getSelectedItem();
-        if (selectedStatus != null && !"All".equals(selectedStatus) && !selectedStatus.equals(item.getStatus().name())) {
-            return false;
-        }
-
-        String query = inventorySearchField.getText() == null ? "" : inventorySearchField.getText().trim().toLowerCase();
-        if (query.isEmpty()) {
-            return true;
-        }
-
-        String serial = item.getSerialNumber() == null ? "" : item.getSerialNumber().toLowerCase();
-        String location = item.getStorageLocationName() == null ? "" : item.getStorageLocationName().toLowerCase();
-        return item.getName().toLowerCase().contains(query)
-                || item.getCategorySummary().toLowerCase().contains(query)
-                || serial.contains(query)
-                || location.contains(query);
-    }
-
     private void showEquipmentSubNav() {
         moduleNavLabel.setText("Equipment Categories");
 
-        Button weaponsButton = createSubNavButton("Weapons", () -> setEquipmentBranch(EquipmentBranch.WEAPON));
-        Button dutyButton = createSubNavButton("Duty", () -> setEquipmentBranch(EquipmentBranch.EQUIPMENT));
-        Button uniformsButton = createSubNavButton("Uniforms", () -> setEquipmentBranch(EquipmentBranch.UNIFORM));
-        Button addButton = createSubNavButton("Add Equipment", this::onAddEquipment);
+        Button weaponsButton = UiNavSupport.createSubNavButton("Weapons", () -> setEquipmentBranch(EquipmentBranch.WEAPON));
+        Button dutyButton = UiNavSupport.createSubNavButton("Duty", () -> setEquipmentBranch(EquipmentBranch.EQUIPMENT));
+        Button uniformsButton = UiNavSupport.createSubNavButton("Uniforms", () -> setEquipmentBranch(EquipmentBranch.UNIFORM));
+        Button addButton = UiNavSupport.createSubNavButton("Add Equipment", this::onAddEquipment);
 
         moduleNavBar.getChildren().setAll(moduleNavLabel, weaponsButton, dutyButton, uniformsButton, addButton);
         setEquipmentBranch(activeEquipmentBranch);
     }
 
     private void setEquipmentBranch(EquipmentBranch branch) {
+        showAddEquipmentPage(false);
         this.activeEquipmentBranch = branch;
         inventoryModuleTitleLabel.setText(branch.getDisplayName());
 
-        List<Button> buttons = getSubNavButtons();
+        List<Button> buttons = UiNavSupport.getSubNavButtons(moduleNavBar);
         if (buttons.size() >= 3) {
-            clearActive(buttons);
+            UiNavSupport.clearActive(buttons);
             switch (branch) {
                 case WEAPON -> buttons.get(0).getStyleClass().add("active");
                 case EQUIPMENT -> buttons.get(1).getStyleClass().add("active");
@@ -2353,96 +1915,58 @@ public class AdminController {
     private void showAdminSubNav(AdminSubTab subTab) {
         moduleNavLabel.setText("Admin");
 
-        Button personnelButton = createSubNavButton("Officers", () -> switchAdminSubTab(AdminSubTab.PERSONNEL));
-        Button lookupsButton = createSubNavButton("Lookups", () -> switchAdminSubTab(AdminSubTab.LOOKUPS));
-        Button historicalButton = createSubNavButton("Historical", () -> switchAdminSubTab(AdminSubTab.HISTORICAL));
-        Button settingsButton = createSubNavButton("Settings", () -> switchAdminSubTab(AdminSubTab.SETTINGS));
+        Button personnelButton = UiNavSupport.createSubNavButton("Officers", () -> switchAdminSubTab(AdminSubTab.PERSONNEL));
+        Button lookupsButton = UiNavSupport.createSubNavButton("Lookups", () -> switchAdminSubTab(AdminSubTab.LOOKUPS));
+        Button historicalButton = UiNavSupport.createSubNavButton("Historical", () -> switchAdminSubTab(AdminSubTab.HISTORICAL));
+        Button settingsButton = UiNavSupport.createSubNavButton("Settings", () -> switchAdminSubTab(AdminSubTab.SETTINGS));
 
         moduleNavBar.getChildren().setAll(moduleNavLabel, personnelButton, lookupsButton, historicalButton, settingsButton);
         switchAdminSubTab(subTab);
     }
 
     private void switchAdminSubTab(AdminSubTab subTab) {
-        List<Button> buttons = getSubNavButtons();
-        clearActive(buttons);
+        List<Button> buttons = UiNavSupport.getSubNavButtons(moduleNavBar);
+        UiNavSupport.clearActive(buttons);
         switch (subTab) {
             case PERSONNEL -> {
                 adminSubModuleTitle.setText("Personnel");
-                setPaneVisible(adminPersonnelPane, true);
-                setPaneVisible(adminLookupsPane, false);
-                setPaneVisible(adminSettingsPane, false);
-                setPaneVisible(adminHistoryPane, false);
-                if (buttons.size() > 0) {
-                    buttons.get(0).getStyleClass().add("active");
-                }
+                UiNavSupport.setPaneVisible(adminPersonnelPane, true);
+                UiNavSupport.setPaneVisible(adminLookupsPane, false);
+                UiNavSupport.setPaneVisible(adminSettingsPane, false);
+                UiNavSupport.setPaneVisible(adminHistoryPane, false);
+                UiNavSupport.activateButtonByIndex(buttons, 0);
             }
             case LOOKUPS -> {
                 adminSubModuleTitle.setText("Lookups");
-                setPaneVisible(adminPersonnelPane, false);
-                setPaneVisible(adminLookupsPane, true);
-                setPaneVisible(adminSettingsPane, false);
-                setPaneVisible(adminHistoryPane, false);
-                if (buttons.size() > 1) {
-                    buttons.get(1).getStyleClass().add("active");
-                }
+                UiNavSupport.setPaneVisible(adminPersonnelPane, false);
+                UiNavSupport.setPaneVisible(adminLookupsPane, true);
+                UiNavSupport.setPaneVisible(adminSettingsPane, false);
+                UiNavSupport.setPaneVisible(adminHistoryPane, false);
+                UiNavSupport.activateButtonByIndex(buttons, 1);
             }
             case HISTORICAL -> {
                 adminSubModuleTitle.setText("Historical Issuance");
-                setPaneVisible(adminPersonnelPane, false);
-                setPaneVisible(adminLookupsPane, false);
-                setPaneVisible(adminSettingsPane, false);
-                setPaneVisible(adminHistoryPane, true);
+                UiNavSupport.setPaneVisible(adminPersonnelPane, false);
+                UiNavSupport.setPaneVisible(adminLookupsPane, false);
+                UiNavSupport.setPaneVisible(adminSettingsPane, false);
+                UiNavSupport.setPaneVisible(adminHistoryPane, true);
                 refreshIssuances();
-                if (buttons.size() > 2) {
-                    buttons.get(2).getStyleClass().add("active");
-                }
+                UiNavSupport.activateButtonByIndex(buttons, 2);
             }
             case SETTINGS -> {
                 adminSubModuleTitle.setText("Settings");
-                setPaneVisible(adminPersonnelPane, false);
-                setPaneVisible(adminLookupsPane, false);
-                setPaneVisible(adminSettingsPane, true);
-                setPaneVisible(adminHistoryPane, false);
-                if (buttons.size() > 3) {
-                    buttons.get(3).getStyleClass().add("active");
-                }
+                UiNavSupport.setPaneVisible(adminPersonnelPane, false);
+                UiNavSupport.setPaneVisible(adminLookupsPane, false);
+                UiNavSupport.setPaneVisible(adminSettingsPane, true);
+                UiNavSupport.setPaneVisible(adminHistoryPane, false);
+                UiNavSupport.activateButtonByIndex(buttons, 3);
             }
-        }
-    }
-
-    private void setModuleNavMessage(String text) {
-        moduleNavLabel.setText(text);
-        moduleNavBar.getChildren().setAll(moduleNavLabel);
-    }
-
-    private Button createSubNavButton(String text, Runnable action) {
-        Button button = new Button(text);
-        button.getStyleClass().add("nav-tab");
-        button.setOnAction(event -> action.run());
-        return button;
-    }
-
-    private List<Button> getSubNavButtons() {
-        List<Button> buttons = new ArrayList<>();
-        for (javafx.scene.Node node : moduleNavBar.getChildren()) {
-            if (node instanceof Button button) {
-                buttons.add(button);
-            }
-        }
-        return buttons;
-    }
-
-    private void clearActive(List<Button> buttons) {
-        for (Button button : buttons) {
-            button.getStyleClass().remove("active");
         }
     }
 
     private void applyTopTabStyles() {
         List<Button> buttons = List.of(topTabEquipment, topTabIssueReturn, topTabAdmin, topTabVehicle);
-        for (Button button : buttons) {
-            button.getStyleClass().remove("active");
-        }
+        UiNavSupport.clearActive(buttons);
 
         switch (activeMainTab) {
             case EQUIPMENT -> topTabEquipment.getStyleClass().add("active");
@@ -2455,11 +1979,6 @@ public class AdminController {
     private void refreshLookupItems(LookupCategory category) {
         lookupEditorTitle.setText(category.getDisplayName());
         lookupItemList.setItems(FXCollections.observableArrayList(lookupDao.findAll(category)));
-    }
-
-    private void setPaneVisible(VBox pane, boolean visible) {
-        pane.setVisible(visible);
-        pane.setManaged(visible);
     }
 
     private OfficerFormData showOfficerDialog(Officer existing) {
@@ -2975,114 +2494,6 @@ public class AdminController {
         return formData;
     }
 
-    private MaintenanceDialogResult showMaintenanceDialog(Vehicle vehicle, VehicleMaintenanceLog existing) {
-        Dialog<MaintenanceDialogResult> dialog = new Dialog<>();
-        boolean editMode = existing != null;
-        dialog.setTitle(editMode ? "Edit Maintenance Log" : "Add Maintenance Log");
-        dialog.setHeaderText("Vehicle: " + vehicle.getUnitNumber());
-        UiAlerts.applyTheme(dialog);
-
-        ButtonType saveButton = new ButtonType("Save", ButtonBar.ButtonData.OK_DONE);
-        ButtonType deleteButton = new ButtonType("Delete", ButtonBar.ButtonData.LEFT);
-        if (editMode) {
-            dialog.getDialogPane().getButtonTypes().addAll(saveButton, deleteButton, ButtonType.CANCEL);
-        } else {
-            dialog.getDialogPane().getButtonTypes().addAll(saveButton, ButtonType.CANCEL);
-        }
-
-        DatePicker datePicker = new DatePicker(editMode ? existing.getLogDate() : LocalDate.now());
-        TextField mileageField = new TextField();
-        TextField costField = new TextField();
-        TextField byField = new TextField();
-        TextArea descriptionArea = new TextArea();
-        descriptionArea.setPrefRowCount(4);
-
-        if (editMode) {
-            if (existing.getMileage() != null) {
-                mileageField.setText(String.valueOf(existing.getMileage()));
-            }
-            if (existing.getCost() != null) {
-                costField.setText(String.valueOf(existing.getCost()));
-            }
-            byField.setText(existing.getPerformedBy() == null ? "" : existing.getPerformedBy());
-            descriptionArea.setText(existing.getDescription() == null ? "" : existing.getDescription());
-        }
-
-        GridPane grid = new GridPane();
-        grid.setHgap(10);
-        grid.setVgap(10);
-        grid.add(new Label("Date"), 0, 0);
-        grid.add(datePicker, 1, 0);
-        grid.add(new Label("Mileage"), 0, 1);
-        grid.add(mileageField, 1, 1);
-        grid.add(new Label("Cost"), 0, 2);
-        grid.add(costField, 1, 2);
-        grid.add(new Label("Performed By"), 0, 3);
-        grid.add(byField, 1, 3);
-        grid.add(new Label("Description"), 0, 4);
-        grid.add(descriptionArea, 1, 4);
-
-        dialog.getDialogPane().setContent(grid);
-        dialog.setResultConverter(buttonType -> {
-            if (editMode && buttonType == deleteButton) {
-                return new MaintenanceDialogResult(true, null);
-            }
-            if (buttonType != saveButton) {
-                return null;
-            }
-
-            Integer mileage = null;
-            String mileageText = text(mileageField);
-            if (!mileageText.isEmpty()) {
-                try {
-                    mileage = Integer.parseInt(mileageText);
-                } catch (NumberFormatException ex) {
-                    UiAlerts.error("Maintenance", "Mileage must be a whole number.");
-                    return null;
-                }
-            }
-
-            Double cost = null;
-            String costText = text(costField);
-            if (!costText.isEmpty()) {
-                try {
-                    cost = Double.parseDouble(costText);
-                } catch (NumberFormatException ex) {
-                    UiAlerts.error("Maintenance", "Cost must be numeric.");
-                    return null;
-                }
-            }
-
-            return new MaintenanceDialogResult(
-                    false,
-                    new MaintenanceFormData(
-                            datePicker.getValue(),
-                            mileage,
-                            cost,
-                            text(descriptionArea),
-                            text(byField)
-                    )
-            );
-        });
-
-        Optional<MaintenanceDialogResult> result = dialog.showAndWait();
-        if (result.isEmpty()) {
-            return null;
-        }
-
-        MaintenanceDialogResult dialogResult = result.get();
-        if (dialogResult == null || dialogResult.deleteRequested()) {
-            return dialogResult;
-        }
-
-        MaintenanceFormData formData = dialogResult.formData();
-        if (formData == null || formData.logDate() == null || formData.description().isEmpty()) {
-            UiAlerts.error("Maintenance", "Date and description are required.");
-            return null;
-        }
-        return dialogResult;
-    }
-
     private void selectLookupById(ComboBox<LookupItem> comboBox, Integer id) {
         if (id == null) {
             return;
@@ -3098,6 +2509,26 @@ public class AdminController {
     }
 
     private void enableLookupTypeAhead(ComboBox<LookupItem> comboBox) {
+        comboBox.setConverter(new StringConverter<>() {
+            @Override
+            public String toString(LookupItem item) {
+                return item == null || item.getName() == null ? "" : item.getName();
+            }
+
+            @Override
+            public LookupItem fromString(String string) {
+                if (string == null || string.isBlank()) {
+                    return null;
+                }
+                String query = string.trim();
+                return comboBox.getItems().stream()
+                        .filter(item -> item.getName() != null)
+                        .filter(item -> item.getName().trim().equalsIgnoreCase(query))
+                        .findFirst()
+                        .orElse(null);
+            }
+        });
+
         comboBox.getEditor().textProperty().addListener((obs, oldValue, newValue) -> {
             String query = newValue == null ? "" : newValue.trim().toLowerCase();
             if (query.isEmpty()) {
@@ -3137,10 +2568,6 @@ public class AdminController {
 
     private static String text(TextField textField) {
         return textField.getText() == null ? "" : textField.getText().trim();
-    }
-
-    private static String text(TextArea textArea) {
-        return textArea.getText() == null ? "" : textArea.getText().trim();
     }
 
     private static List<String> parseSerials(TextArea serialsArea) {
@@ -3251,10 +2678,4 @@ public class AdminController {
                                    int year, String vin, String plate) {
     }
 
-    private record MaintenanceFormData(LocalDate logDate, Integer mileage, Double cost,
-                                       String description, String performedBy) {
-    }
-
-    private record MaintenanceDialogResult(boolean deleteRequested, MaintenanceFormData formData) {
-    }
 }

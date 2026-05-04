@@ -129,6 +129,17 @@ public class EquipmentDao {
         }
     }
 
+    public void updateStatus(int itemId, EquipmentStatus status) {
+        try (Connection connection = DatabaseManager.getConnection();
+             PreparedStatement preparedStatement = connection.prepareStatement("UPDATE equipment_items SET status = ? WHERE item_id = ?")) {
+            preparedStatement.setString(1, status.name());
+            preparedStatement.setInt(2, itemId);
+            preparedStatement.executeUpdate();
+        } catch (SQLException ex) {
+            throw new IllegalStateException("Failed to update equipment status", ex);
+        }
+    }
+
     public boolean hasIssuanceHistory(int itemId) {
         String sql = "SELECT 1 FROM issuances WHERE item_id = ? LIMIT 1";
         try (Connection connection = DatabaseManager.getConnection();

@@ -13,7 +13,10 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class IssuanceDao {
 
@@ -242,33 +245,93 @@ public class IssuanceDao {
                 """;
 
         List<IssuedItemRow> rows = new ArrayList<>();
+        Map<String, UniformIssuedGroup> uniformGroups = new HashMap<>();
         try (Connection connection = DatabaseManager.getConnection();
              PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
             preparedStatement.setInt(1, officerId);
             try (ResultSet rs = preparedStatement.executeQuery()) {
                 while (rs.next()) {
                     EquipmentBranch branch = EquipmentBranch.fromName(rs.getString("branch"));
+                    String typeName = rs.getString("equipment_type_name");
+                    String sizeName = rs.getString("size_name");
+                    String itemName = rs.getString("item_name");
+                    Double replacementCost = nullableDouble(rs, "replacement_cost");
+                    LocalDate issuedDate = rs.getDate("issued_date").toLocalDate();
                     String summary = buildSummary(branch,
-                            rs.getString("equipment_type_name"),
+                            typeName,
                             rs.getString("weapon_type_name"),
                             rs.getString("caliber_name"),
-                            rs.getString("size_name"),
+                            sizeName,
                             rs.getBoolean("is_attachment"));
+
+                    if (branch == EquipmentBranch.UNIFORM) {
+                        String normalizedType = typeName == null ? "" : typeName.trim();
+                        String normalizedSize = sizeName == null ? "" : sizeName.trim();
+                        String key = normalizedType + "|" + normalizedSize;
+                        UniformIssuedGroup group = uniformGroups.get(key);
+                        if (group == null) {
+                            group = new UniformIssuedGroup(
+                                    normalizedType.isEmpty() ? itemName : normalizedType,
+                                    summary,
+                                    replacementCost,
+                                    issuedDate
+                            );
+                            uniformGroups.put(key, group);
+                        }
+                        group.issuanceIds.add(rs.getInt("issuance_id"));
+                        continue;
+                    }
+
                     rows.add(new IssuedItemRow(
                             rs.getInt("issuance_id"),
-                            rs.getString("item_name"),
+                            List.of(rs.getInt("issuance_id")),
+                            1,
+                            itemName,
                             branch,
                             summary,
                             rs.getString("serial_number"),
-                            nullableDouble(rs, "replacement_cost"),
-                            rs.getDate("issued_date").toLocalDate(),
+                            replacementCost,
+                            issuedDate,
                             rs.getString("attached_to_weapon")
                     ));
                 }
             }
+            for (UniformIssuedGroup group : uniformGroups.values()) {
+                int firstIssuanceId = group.issuanceIds.get(0);
+                rows.add(new IssuedItemRow(
+                        firstIssuanceId,
+                        List.copyOf(group.issuanceIds),
+                        group.issuanceIds.size(),
+                        group.itemName,
+                        EquipmentBranch.UNIFORM,
+                        group.categorySummary,
+                        null,
+                        group.replacementCost,
+                        group.issuedDate,
+                        null
+                ));
+            }
+            rows.sort(Comparator
+                    .comparing(IssuedItemRow::getIssuedDate, Comparator.reverseOrder())
+                    .thenComparing(IssuedItemRow::getItemName, String.CASE_INSENSITIVE_ORDER));
             return rows;
         } catch (SQLException ex) {
             throw new IllegalStateException("Failed to load issued items", ex);
+        }
+    }
+
+    private static final class UniformIssuedGroup {
+        private final String itemName;
+        private final String categorySummary;
+        private final Double replacementCost;
+        private final LocalDate issuedDate;
+        private final List<Integer> issuanceIds = new ArrayList<>();
+
+        private UniformIssuedGroup(String itemName, String categorySummary, Double replacementCost, LocalDate issuedDate) {
+            this.itemName = itemName;
+            this.categorySummary = categorySummary;
+            this.replacementCost = replacementCost;
+            this.issuedDate = issuedDate;
         }
     }
 

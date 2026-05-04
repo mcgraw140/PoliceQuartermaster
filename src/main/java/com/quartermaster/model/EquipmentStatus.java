@@ -4,5 +4,6 @@ public enum EquipmentStatus {
     AVAILABLE,
     ISSUED,
     MAINTENANCE,
-    RETIRED
+    RETIRED,
+    DESTROYED
 }

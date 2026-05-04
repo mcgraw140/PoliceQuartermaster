@@ -46,7 +46,7 @@ public class MyEquipmentController {
 
         itemNameColumn.setCellValueFactory(new PropertyValueFactory<>("itemName"));
         categoryColumn.setCellValueFactory(new PropertyValueFactory<>("categorySummary"));
-        serialColumn.setCellValueFactory(new PropertyValueFactory<>("serialNumber"));
+        serialColumn.setCellValueFactory(new PropertyValueFactory<>("serialOrQty"));
         issuedDateColumn.setCellValueFactory(cellData -> javafx.beans.binding.Bindings.createStringBinding(
                 () -> cellData.getValue().getIssuedDate().toString()
         ));
