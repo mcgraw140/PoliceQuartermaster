@@ -177,6 +177,7 @@
                             <Label text="Vehicle"/>
                             <ComboBox fx:id="maintenanceVehicleCombo" prefWidth="280" onAction="#onMaintenanceVehicleChanged"/>
                             <Button text="Add Log" onAction="#onAddMaintenanceLog" styleClass="btn-secondary"/>
+                            <Button text="Edit Log" onAction="#onEditMaintenanceLog" styleClass="btn-secondary"/>
                             <Button text="Delete Log" onAction="#onDeleteMaintenanceLog" styleClass="btn-danger"/>
                         </FlowPane>
                         <TableView fx:id="maintenanceTable" prefHeight="220" styleClass="app-table">

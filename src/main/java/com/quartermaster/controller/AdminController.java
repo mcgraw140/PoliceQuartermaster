@@ -465,14 +465,24 @@ public class AdminController {
         }
 
         int created = 0;
-        List<String> serials = formData.serialNumbers();
-        if (serials.isEmpty()) {
-            equipmentDao.insert(formData.toItem(0, formData.serialNumber()));
-            created = 1;
-        } else {
-            for (String serial : serials) {
-                equipmentDao.insert(formData.toItem(0, serial));
+        if (formData.branch() == EquipmentBranch.UNIFORM) {
+            int quantity = formData.quantity() == null ? 1 : formData.quantity();
+            String serialPrefix = formData.serialPrefix();
+            for (int i = 1; i <= quantity; i++) {
+                String generatedSerial = buildUniformSerial(serialPrefix, i);
+                equipmentDao.insert(formData.toItem(0, generatedSerial));
                 created++;
+            }
+        } else {
+            List<String> serials = formData.serialNumbers();
+            if (serials.isEmpty()) {
+                equipmentDao.insert(formData.toItem(0, formData.serialNumber()));
+                created = 1;
+            } else {
+                for (String serial : serials) {
+                    equipmentDao.insert(formData.toItem(0, serial));
+                    created++;
+                }
             }
         }
 
@@ -746,14 +756,49 @@ public class AdminController {
             return;
         }
 
-        MaintenanceFormData formData = showMaintenanceDialog(selected);
-        if (formData == null) {
+        MaintenanceDialogResult result = showMaintenanceDialog(selected, null);
+        if (result == null || result.deleteRequested()) {
             return;
         }
+        MaintenanceFormData formData = result.formData();
 
         maintenanceLogDao.insert(selected.getVehicleId(), formData.logDate(), formData.mileage(),
                 formData.cost(), formData.description(), formData.performedBy());
         onMaintenanceVehicleChanged();
+    }
+
+    @FXML
+    public void onEditMaintenanceLog() {
+        Vehicle selectedVehicle = maintenanceVehicleCombo.getSelectionModel().getSelectedItem();
+        if (selectedVehicle == null) {
+            UiAlerts.error("Maintenance", "Select a vehicle first.");
+            return;
+        }
+
+        VehicleMaintenanceLog selectedLog = maintenanceTable.getSelectionModel().getSelectedItem();
+        if (selectedLog == null) {
+            UiAlerts.error("Maintenance", "Select a maintenance log row to edit.");
+            return;
+        }
+
+        MaintenanceDialogResult result = showMaintenanceDialog(selectedVehicle, selectedLog);
+        if (result == null) {
+            return;
+        }
+
+        if (result.deleteRequested()) {
+            maintenanceLogDao.delete(selectedLog.getLogId());
+            onMaintenanceVehicleChanged();
+            UiAlerts.info("Maintenance", "Maintenance log deleted.");
+            return;
+        }
+
+        MaintenanceFormData formData = result.formData();
+
+        maintenanceLogDao.update(selectedLog.getLogId(), selectedVehicle.getVehicleId(), formData.logDate(),
+                formData.mileage(), formData.cost(), formData.description(), formData.performedBy());
+        onMaintenanceVehicleChanged();
+        UiAlerts.info("Maintenance", "Maintenance log updated.");
     }
 
     @FXML
@@ -801,7 +846,7 @@ public class AdminController {
         totalLine.setStyle("-fx-font-size: 14px; -fx-font-weight: 700;");
 
         TableView<VehicleMaintenanceLog> historyTable = new TableView<>(FXCollections.observableArrayList(logs));
-        historyTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        historyTable.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
         historyTable.setPrefHeight(Math.min(520, 170 + logs.size() * 26.0));
 
         TableColumn<VehicleMaintenanceLog, String> dateCol = new TableColumn<>("Date");
@@ -819,14 +864,15 @@ public class AdminController {
             Double value = cellData.getValue().getCost();
             return value == null ? "" : String.format("$%.2f", value);
         }));
-        historyTable.getColumns().setAll(dateCol, mileageCol, descriptionCol, byCol, costCol);
+        historyTable.getColumns().clear();
+        historyTable.getColumns().addAll(List.of(dateCol, mileageCol, descriptionCol, byCol, costCol));
 
         historyTable.setRowFactory(tableView -> {
             TableRow<VehicleMaintenanceLog> row = new TableRow<>();
             row.setOnMouseClicked(event -> {
                 if (event.getClickCount() == 2 && !row.isEmpty()) {
                     VehicleMaintenanceLog selected = row.getItem();
-                    if (showMaintenanceLogDetailAndDeleteOption(selected)) {
+                    if (showMaintenanceLogDetailEditDeleteOption(vehicle, selected)) {
                         List<VehicleMaintenanceLog> refreshed = maintenanceLogDao.findByVehicle(vehicle.getVehicleId());
                         historyTable.setItems(FXCollections.observableArrayList(refreshed));
                         maintenanceTable.setItems(FXCollections.observableArrayList(refreshed));
@@ -861,14 +907,15 @@ public class AdminController {
         }
     }
 
-    private boolean showMaintenanceLogDetailAndDeleteOption(VehicleMaintenanceLog log) {
+    private boolean showMaintenanceLogDetailEditDeleteOption(Vehicle vehicle, VehicleMaintenanceLog log) {
         Dialog<ButtonType> detailDialog = new Dialog<>();
         detailDialog.setTitle("Maintenance Details");
         UiAlerts.applyTheme(detailDialog);
 
+        ButtonType editButton = new ButtonType("Edit", ButtonBar.ButtonData.OTHER);
         ButtonType deleteButton = new ButtonType("Delete", ButtonBar.ButtonData.LEFT);
         ButtonType closeButton = new ButtonType("Close", ButtonBar.ButtonData.CANCEL_CLOSE);
-        detailDialog.getDialogPane().getButtonTypes().addAll(deleteButton, closeButton);
+        detailDialog.getDialogPane().getButtonTypes().addAll(editButton, deleteButton, closeButton);
 
         GridPane details = new GridPane();
         details.setHgap(12);
@@ -891,6 +938,24 @@ public class AdminController {
         detailDialog.getDialogPane().setContent(details);
 
         Optional<ButtonType> result = detailDialog.showAndWait();
+        if (result.isPresent() && result.get() == editButton) {
+            MaintenanceDialogResult dialogResult = showMaintenanceDialog(vehicle, log);
+            if (dialogResult == null) {
+                return false;
+            }
+
+            if (dialogResult.deleteRequested()) {
+                maintenanceLogDao.delete(log.getLogId());
+                UiAlerts.info("Maintenance", "Maintenance log deleted.");
+                return true;
+            }
+
+            MaintenanceFormData formData = dialogResult.formData();
+            maintenanceLogDao.update(log.getLogId(), vehicle.getVehicleId(), formData.logDate(),
+                    formData.mileage(), formData.cost(), formData.description(), formData.performedBy());
+            UiAlerts.info("Maintenance", "Maintenance log updated.");
+            return true;
+        }
         if (result.isPresent() && result.get() == deleteButton) {
             maintenanceLogDao.delete(log.getLogId());
             UiAlerts.info("Maintenance", "Maintenance log deleted.");
@@ -1013,7 +1078,7 @@ public class AdminController {
         info.add(new Label(String.format("$%.2f", totalCost)), 1, 4);
 
         TableView<VehicleMaintenanceLog> table = new TableView<>(FXCollections.observableArrayList(logs));
-        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        table.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
         table.setPrefHeight(Math.min(520, 150 + logs.size() * 26.0));
 
         TableColumn<VehicleMaintenanceLog, String> dateCol = new TableColumn<>("Date");
@@ -1031,7 +1096,8 @@ public class AdminController {
             Double value = cellData.getValue().getCost();
             return value == null ? "" : String.format("$%.2f", value);
         }));
-        table.getColumns().setAll(dateCol, mileageCol, descriptionCol, byCol, costCol);
+        table.getColumns().clear();
+        table.getColumns().addAll(List.of(dateCol, mileageCol, descriptionCol, byCol, costCol));
 
         VBox printable = new VBox(12, title, subtitle, printed, info, table);
         printable.setPadding(new Insets(16));
@@ -1412,6 +1478,16 @@ public class AdminController {
             Double value = cellData.getValue().getCost();
             return value == null ? "" : String.format("$%.2f", value);
         }));
+
+        maintenanceTable.setRowFactory(tableView -> {
+            TableRow<VehicleMaintenanceLog> row = new TableRow<>();
+            row.setOnMouseClicked(event -> {
+                if (event.getClickCount() == 2 && !row.isEmpty()) {
+                    onEditMaintenanceLog();
+                }
+            });
+            return row;
+        });
     }
 
     private void refreshAll() {
@@ -1470,7 +1546,7 @@ public class AdminController {
         details.add(new Label(item.getStatus().name()), 1, 5);
 
         TableView<IssuanceAdminRow> historyTable = new TableView<>();
-        historyTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        historyTable.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
         historyTable.setPrefHeight(240);
 
         TableColumn<IssuanceAdminRow, String> issuedToCol = new TableColumn<>("Issued To");
@@ -1490,7 +1566,8 @@ public class AdminController {
         returnedDateCol.setCellValueFactory(cellData -> Bindings.createStringBinding(
                 () -> cellData.getValue().getReturnedDate() == null ? "" : cellData.getValue().getReturnedDate().toString()
         ));
-        historyTable.getColumns().setAll(issuedToCol, issuedByCol, issuedDateCol, returnedByCol, returnedDateCol);
+        historyTable.getColumns().clear();
+        historyTable.getColumns().addAll(List.of(issuedToCol, issuedByCol, issuedDateCol, returnedByCol, returnedDateCol));
 
         List<IssuanceAdminRow> history = issuanceDao.findByItemId(item.getItemId());
         historyTable.setItems(FXCollections.observableArrayList(history));
@@ -1650,7 +1727,7 @@ public class AdminController {
         info.add(new Label(item.getReplacementCost() == null ? "" : String.format("$%.2f", item.getReplacementCost())), 1, 3);
 
         TableView<IssuanceAdminRow> table = new TableView<>(FXCollections.observableArrayList(history));
-        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        table.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
         table.setPrefHeight(Math.min(520, 160 + history.size() * 26.0));
 
         TableColumn<IssuanceAdminRow, String> issuedToCol = new TableColumn<>("Issued To");
@@ -1670,7 +1747,8 @@ public class AdminController {
         returnedDateCol.setCellValueFactory(cellData -> Bindings.createStringBinding(
                 () -> cellData.getValue().getReturnedDate() == null ? "" : cellData.getValue().getReturnedDate().toString()
         ));
-        table.getColumns().setAll(issuedToCol, issuedByCol, issuedDateCol, returnedByCol, returnedDateCol);
+        table.getColumns().clear();
+        table.getColumns().addAll(List.of(issuedToCol, issuedByCol, issuedDateCol, returnedByCol, returnedDateCol));
 
         Label responsibility = new Label("Officer Responsibility: Officers are responsible for all issued items. Lost or damaged items will be replaced at the listed replacement cost.");
         responsibility.setWrapText(true);
@@ -1700,7 +1778,7 @@ public class AdminController {
                 .collect(Collectors.toList());
 
         equipmentTable.setItems(FXCollections.observableArrayList(filtered));
-        inventorySummaryLabel.setText("Showing " + filtered.size() + " of " + byBranch.size() + " items");
+        inventorySummaryLabel.setText(buildInventorySummaryText(filtered, byBranch.size()));
 
         boolean weaponView = activeEquipmentBranch == EquipmentBranch.WEAPON;
         attachItemButton.setVisible(weaponView);
@@ -1709,6 +1787,25 @@ public class AdminController {
         removeAttachmentButton.setManaged(weaponView);
 
         refreshIssueOptions();
+    }
+
+    private String buildInventorySummaryText(List<EquipmentItem> filtered, int byBranchTotal) {
+        String base = "Showing " + filtered.size() + " of " + byBranchTotal + " items";
+        if (activeEquipmentBranch != EquipmentBranch.UNIFORM) {
+            return base;
+        }
+
+        Map<String, Long> grouped = filtered.stream()
+                .collect(Collectors.groupingBy(EquipmentItem::getCategorySummary, Collectors.counting()));
+        if (grouped.isEmpty()) {
+            return base;
+        }
+
+        String breakdown = grouped.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey(String.CASE_INSENSITIVE_ORDER))
+                .map(entry -> entry.getKey() + " x" + entry.getValue())
+                .collect(Collectors.joining(" | "));
+        return base + "\nUniform counts: " + breakdown;
     }
 
     private void refreshIssueOptions() {
@@ -2041,7 +2138,7 @@ public class AdminController {
         details.add(new Label(String.valueOf(returnedItems == null ? 0 : returnedItems.size())), 1, 3);
 
         TableView<IssuedItemRow> table = new TableView<>(FXCollections.observableArrayList(currentIssued));
-        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        table.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
         table.setPrefHeight(Math.min(520, 150 + currentIssued.size() * 26.0));
 
         TableColumn<IssuedItemRow, String> nameCol = new TableColumn<>("Name");
@@ -2059,7 +2156,8 @@ public class AdminController {
         dateCol.setCellValueFactory(cellData -> Bindings.createStringBinding(
                 () -> cellData.getValue().getIssuedDate() == null ? "" : cellData.getValue().getIssuedDate().toString()
         ));
-        table.getColumns().setAll(nameCol, categoryCol, serialCol, costCol, dateCol);
+        table.getColumns().clear();
+        table.getColumns().addAll(List.of(nameCol, categoryCol, serialCol, costCol, dateCol));
 
         VBox returnedSection = new VBox(6);
         if (returnedItems != null && !returnedItems.isEmpty()) {
@@ -2067,7 +2165,7 @@ public class AdminController {
             returnedTitle.setStyle("-fx-font-size: 16px; -fx-font-weight: 700; -fx-text-fill: black;");
 
             TableView<IssuedItemRow> returnedTable = new TableView<>(FXCollections.observableArrayList(returnedItems));
-            returnedTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+            returnedTable.setColumnResizePolicy(TableView.UNCONSTRAINED_RESIZE_POLICY);
             returnedTable.setPrefHeight(Math.min(320, 120 + returnedItems.size() * 26.0));
 
             TableColumn<IssuedItemRow, String> returnedNameCol = new TableColumn<>("Name");
@@ -2085,7 +2183,8 @@ public class AdminController {
             returnedDateCol.setCellValueFactory(cellData -> Bindings.createStringBinding(
                 () -> cellData.getValue().getIssuedDate() == null ? "" : cellData.getValue().getIssuedDate().toString()
             ));
-            returnedTable.getColumns().setAll(returnedNameCol, returnedCategoryCol, returnedSerialCol, returnedCostCol, returnedDateCol);
+            returnedTable.getColumns().clear();
+            returnedTable.getColumns().addAll(List.of(returnedNameCol, returnedCategoryCol, returnedSerialCol, returnedCostCol, returnedDateCol));
 
             returnedSection.getChildren().addAll(returnedTitle, returnedTable);
         }
@@ -2503,6 +2602,10 @@ public class AdminController {
         TextArea serialsArea = new TextArea();
         serialsArea.setPrefRowCount(4);
         serialsArea.setPromptText("One serial number per line");
+        TextField quantityField = new TextField("1");
+        quantityField.setPromptText("Quantity");
+        TextField serialPrefixField = new TextField();
+        serialPrefixField.setPromptText("Optional serial prefix (e.g. UNI-SHIRT)");
 
         ComboBox<EquipmentBranch> branchCombo = new ComboBox<>(FXCollections.observableArrayList(EquipmentBranch.values()));
         branchCombo.getSelectionModel().select(existing == null ? activeEquipmentBranch : existing.getBranch());
@@ -2620,6 +2723,9 @@ public class AdminController {
         Label weaponTypeLabel = new Label("Weapon Type");
         Label caliberLabel = new Label("Caliber");
         Label sizeLabel = new Label("Uniform Size");
+        Label serialNumbersLabel = new Label("Serial Numbers");
+        Label quantityLabel = new Label("Quantity");
+        Label serialPrefixLabel = new Label("Serial Prefix");
 
         GridPane grid = new GridPane();
         grid.setHgap(10);
@@ -2646,8 +2752,12 @@ public class AdminController {
         grid.add(new Label("Storage"), 0, row);
         grid.add(storageCombo, 1, row++);
         if (existing == null) {
-            grid.add(new Label("Serial Numbers"), 0, row);
+            grid.add(serialNumbersLabel, 0, row);
             grid.add(serialsArea, 1, row++);
+            grid.add(quantityLabel, 0, row);
+            grid.add(quantityField, 1, row++);
+            grid.add(serialPrefixLabel, 0, row);
+            grid.add(serialPrefixField, 1, row++);
         } else {
             grid.add(new Label("Serial"), 0, row);
             grid.add(serialField, 1, row++);
@@ -2676,6 +2786,20 @@ public class AdminController {
             caliberLabel.setVisible(weapon);
             sizeLabel.setManaged(uniform);
             sizeLabel.setVisible(uniform);
+
+            boolean addMode = existing == null;
+            serialNumbersLabel.setManaged(addMode && !uniform);
+            serialNumbersLabel.setVisible(addMode && !uniform);
+            quantityField.setManaged(addMode && uniform);
+            quantityField.setVisible(addMode && uniform);
+            quantityLabel.setManaged(addMode && uniform);
+            quantityLabel.setVisible(addMode && uniform);
+            serialPrefixField.setManaged(addMode && uniform);
+            serialPrefixField.setVisible(addMode && uniform);
+            serialPrefixLabel.setManaged(addMode && uniform);
+            serialPrefixLabel.setVisible(addMode && uniform);
+            serialsArea.setManaged(addMode && !uniform);
+            serialsArea.setVisible(addMode && !uniform);
         };
         branchCombo.valueProperty().addListener((obs, oldValue, newValue) -> applyBranchLabels.run());
         applyBranchLabels.run();
@@ -2707,6 +2831,21 @@ public class AdminController {
                         return null;
                     }
                     }
+
+            Integer quantity = null;
+            if (existing == null && branch == EquipmentBranch.UNIFORM) {
+                String quantityText = text(quantityField);
+                try {
+                    quantity = Integer.parseInt(quantityText);
+                    if (quantity <= 0) {
+                        UiAlerts.error("Equipment", "Quantity must be greater than zero.");
+                        return null;
+                    }
+                } catch (NumberFormatException ex) {
+                    UiAlerts.error("Equipment", "Quantity must be a whole number.");
+                    return null;
+                }
+            }
             return new EquipmentFormData(
                     text(nameField),
                     branch,
@@ -2717,6 +2856,8 @@ public class AdminController {
                     selectedId(storageCombo), selectedName(storageCombo),
                     text(serialField),
                     parseSerials(serialsArea),
+                    quantity,
+                    text(serialPrefixField),
                         replacementCost,
                     conditionCombo.getValue(),
                     statusCombo.getValue(),
@@ -2738,11 +2879,23 @@ public class AdminController {
             UiAlerts.error("Equipment", "Replacement cost is required.");
             return null;
         }
-        if (existing == null && formData.serialNumbers().isEmpty()) {
+        if (existing == null && formData.branch() != EquipmentBranch.UNIFORM && formData.serialNumbers().isEmpty()) {
             UiAlerts.error("Equipment", "Enter at least one serial number to add inventory in bulk.");
             return null;
         }
+        if (existing == null && formData.branch() == EquipmentBranch.UNIFORM && (formData.quantity() == null || formData.quantity() <= 0)) {
+            UiAlerts.error("Equipment", "Uniform quantity is required.");
+            return null;
+        }
         return formData;
+    }
+
+    private static String buildUniformSerial(String serialPrefix, int index) {
+        String prefix = serialPrefix == null ? "" : serialPrefix.trim();
+        if (prefix.isEmpty()) {
+            return null;
+        }
+        return prefix + "-" + String.format("%03d", index);
     }
 
     private VehicleFormData showVehicleDialog(Vehicle existing) {
@@ -2822,21 +2975,38 @@ public class AdminController {
         return formData;
     }
 
-    private MaintenanceFormData showMaintenanceDialog(Vehicle vehicle) {
-        Dialog<MaintenanceFormData> dialog = new Dialog<>();
-        dialog.setTitle("Add Maintenance Log");
+    private MaintenanceDialogResult showMaintenanceDialog(Vehicle vehicle, VehicleMaintenanceLog existing) {
+        Dialog<MaintenanceDialogResult> dialog = new Dialog<>();
+        boolean editMode = existing != null;
+        dialog.setTitle(editMode ? "Edit Maintenance Log" : "Add Maintenance Log");
         dialog.setHeaderText("Vehicle: " + vehicle.getUnitNumber());
         UiAlerts.applyTheme(dialog);
 
         ButtonType saveButton = new ButtonType("Save", ButtonBar.ButtonData.OK_DONE);
-        dialog.getDialogPane().getButtonTypes().addAll(saveButton, ButtonType.CANCEL);
+        ButtonType deleteButton = new ButtonType("Delete", ButtonBar.ButtonData.LEFT);
+        if (editMode) {
+            dialog.getDialogPane().getButtonTypes().addAll(saveButton, deleteButton, ButtonType.CANCEL);
+        } else {
+            dialog.getDialogPane().getButtonTypes().addAll(saveButton, ButtonType.CANCEL);
+        }
 
-        DatePicker datePicker = new DatePicker(LocalDate.now());
+        DatePicker datePicker = new DatePicker(editMode ? existing.getLogDate() : LocalDate.now());
         TextField mileageField = new TextField();
         TextField costField = new TextField();
         TextField byField = new TextField();
         TextArea descriptionArea = new TextArea();
         descriptionArea.setPrefRowCount(4);
+
+        if (editMode) {
+            if (existing.getMileage() != null) {
+                mileageField.setText(String.valueOf(existing.getMileage()));
+            }
+            if (existing.getCost() != null) {
+                costField.setText(String.valueOf(existing.getCost()));
+            }
+            byField.setText(existing.getPerformedBy() == null ? "" : existing.getPerformedBy());
+            descriptionArea.setText(existing.getDescription() == null ? "" : existing.getDescription());
+        }
 
         GridPane grid = new GridPane();
         grid.setHgap(10);
@@ -2854,6 +3024,9 @@ public class AdminController {
 
         dialog.getDialogPane().setContent(grid);
         dialog.setResultConverter(buttonType -> {
+            if (editMode && buttonType == deleteButton) {
+                return new MaintenanceDialogResult(true, null);
+            }
             if (buttonType != saveButton) {
                 return null;
             }
@@ -2880,26 +3053,34 @@ public class AdminController {
                 }
             }
 
-            return new MaintenanceFormData(
-                    datePicker.getValue(),
-                    mileage,
-                    cost,
-                    text(descriptionArea),
-                    text(byField)
+            return new MaintenanceDialogResult(
+                    false,
+                    new MaintenanceFormData(
+                            datePicker.getValue(),
+                            mileage,
+                            cost,
+                            text(descriptionArea),
+                            text(byField)
+                    )
             );
         });
 
-        Optional<MaintenanceFormData> result = dialog.showAndWait();
+        Optional<MaintenanceDialogResult> result = dialog.showAndWait();
         if (result.isEmpty()) {
             return null;
         }
 
-        MaintenanceFormData formData = result.get();
+        MaintenanceDialogResult dialogResult = result.get();
+        if (dialogResult == null || dialogResult.deleteRequested()) {
+            return dialogResult;
+        }
+
+        MaintenanceFormData formData = dialogResult.formData();
         if (formData == null || formData.logDate() == null || formData.description().isEmpty()) {
             UiAlerts.error("Maintenance", "Date and description are required.");
             return null;
         }
-        return formData;
+        return dialogResult;
     }
 
     private void selectLookupById(ComboBox<LookupItem> comboBox, Integer id) {
@@ -3041,6 +3222,8 @@ public class AdminController {
                                      Integer storageLocationId, String storageLocationName,
                                      String serialNumber,
                                      List<String> serialNumbers,
+                                     Integer quantity,
+                                     String serialPrefix,
                                      Double replacementCost,
                                      EquipmentCondition condition,
                                      EquipmentStatus status,
@@ -3070,5 +3253,8 @@ public class AdminController {
 
     private record MaintenanceFormData(LocalDate logDate, Integer mileage, Double cost,
                                        String description, String performedBy) {
+    }
+
+    private record MaintenanceDialogResult(boolean deleteRequested, MaintenanceFormData formData) {
     }
 }

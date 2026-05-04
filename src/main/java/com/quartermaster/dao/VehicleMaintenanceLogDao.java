@@ -76,6 +76,37 @@ public class VehicleMaintenanceLogDao {
         }
     }
 
+    public void update(int logId, int vehicleId, LocalDate logDate, Integer mileage, Double cost,
+                       String description, String performedBy) {
+        String sql = """
+                UPDATE vehicle_maintenance_logs
+                SET vehicle_id = ?, log_date = ?, mileage = ?, cost = ?, description = ?, performed_by = ?
+                WHERE log_id = ?
+                """;
+
+        try (Connection connection = DatabaseManager.getConnection();
+             PreparedStatement preparedStatement = connection.prepareStatement(sql)) {
+            preparedStatement.setInt(1, vehicleId);
+            preparedStatement.setDate(2, Date.valueOf(logDate));
+            if (mileage == null) {
+                preparedStatement.setNull(3, java.sql.Types.INTEGER);
+            } else {
+                preparedStatement.setInt(3, mileage);
+            }
+            if (cost == null) {
+                preparedStatement.setNull(4, java.sql.Types.DECIMAL);
+            } else {
+                preparedStatement.setDouble(4, cost);
+            }
+            preparedStatement.setString(5, description);
+            preparedStatement.setString(6, performedBy);
+            preparedStatement.setInt(7, logId);
+            preparedStatement.executeUpdate();
+        } catch (SQLException ex) {
+            throw new IllegalStateException("Failed to update maintenance log", ex);
+        }
+    }
+
     public double findTotalCostByVehicle(int vehicleId) {
         String sql = "SELECT COALESCE(SUM(cost), 0) AS total_cost FROM vehicle_maintenance_logs WHERE vehicle_id = ?";
         try (Connection connection = DatabaseManager.getConnection();
