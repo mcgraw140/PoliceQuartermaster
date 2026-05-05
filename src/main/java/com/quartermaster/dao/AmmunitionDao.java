@@ -14,10 +14,12 @@ import java.util.List;
 public class AmmunitionDao {
 
     public record AmmoStockRecord(int ammoId,
-                                  Integer makeId, String makeName,
-                                  Integer modelId, String modelName,
-                                  Integer caliberId, String caliberName,
-                                  Integer useId, String useName,
+                                  Integer typeDefId,
+                                  String typeName,
+                                  String caliberName,
+                                  String useName,
+                                  Double costPerBox,
+                                  Integer roundsPerBox,
                                   int roundsOnHand,
                                   Double unitCost,
                                   Integer storageLocationId, String storageLocationName,
@@ -27,17 +29,15 @@ public class AmmunitionDao {
 
     public List<AmmoStockRecord> findAll() {
         String sql = """
-                SELECT a.ammo_id, a.make_id, a.model_id, a.caliber_id, a.use_id,
+              SELECT a.ammo_id, a.type_def_id,
                        a.rounds_on_hand, a.unit_cost, a.storage_location_id, a.notes, a.status,
-                       mk.name AS make_name, md.name AS model_name, cb.name AS caliber_name,
-                       us.name AS use_name, sl.name AS storage_name
+                       atd.type_name, atd.caliber AS caliber_name, atd.use_type AS use_name,
+                       atd.cost_per_box, atd.rounds_per_box,
+                       sl.name AS storage_name
                 FROM ammunition_inventory a
-                LEFT JOIN ammo_makes mk      ON mk.id = a.make_id
-                LEFT JOIN ammo_models md     ON md.id = a.model_id
-                LEFT JOIN ammo_calibers cb   ON cb.id = a.caliber_id
-                LEFT JOIN ammo_uses us       ON us.id = a.use_id
+              LEFT JOIN ammo_type_definitions atd ON atd.id = a.type_def_id
                 LEFT JOIN storage_locations sl ON sl.id = a.storage_location_id
-                ORDER BY mk.name, md.name, cb.name
+              ORDER BY atd.caliber, atd.type_name
                 """;
         List<AmmoStockRecord> rows = new ArrayList<>();
         try (Connection connection = DatabaseManager.getConnection();
@@ -54,15 +54,13 @@ public class AmmunitionDao {
 
     public AmmoStockRecord findById(int ammoId) {
         String sql = """
-                SELECT a.ammo_id, a.make_id, a.model_id, a.caliber_id, a.use_id,
+              SELECT a.ammo_id, a.type_def_id,
                        a.rounds_on_hand, a.unit_cost, a.storage_location_id, a.notes, a.status,
-                       mk.name AS make_name, md.name AS model_name, cb.name AS caliber_name,
-                       us.name AS use_name, sl.name AS storage_name
+                       atd.type_name, atd.caliber AS caliber_name, atd.use_type AS use_name,
+                       atd.cost_per_box, atd.rounds_per_box,
+                       sl.name AS storage_name
                 FROM ammunition_inventory a
-                LEFT JOIN ammo_makes mk      ON mk.id = a.make_id
-                LEFT JOIN ammo_models md     ON md.id = a.model_id
-                LEFT JOIN ammo_calibers cb   ON cb.id = a.caliber_id
-                LEFT JOIN ammo_uses us       ON us.id = a.use_id
+              LEFT JOIN ammo_type_definitions atd ON atd.id = a.type_def_id
                 LEFT JOIN storage_locations sl ON sl.id = a.storage_location_id
                 WHERE a.ammo_id = ?
                 """;
@@ -77,21 +75,19 @@ public class AmmunitionDao {
         }
     }
 
-    public int insert(Integer makeId, Integer modelId, Integer caliberId, Integer useId,
-                      int roundsOnHand, Double unitCost, Integer storageLocationId, String notes) {
+    public int insert(Integer typeDefId, int roundsOnHand, Double unitCost,
+                      Integer storageLocationId, String notes, String status) {
         String sql = "INSERT INTO ammunition_inventory "
-                + "(make_id, model_id, caliber_id, use_id, rounds_on_hand, unit_cost, storage_location_id, notes, status) "
-                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE')";
+                + "(type_def_id, rounds_on_hand, unit_cost, storage_location_id, notes, status) "
+                + "VALUES (?, ?, ?, ?, ?, ?)";
         try (Connection connection = DatabaseManager.getConnection();
              PreparedStatement ps = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-            setIntOrNull(ps, 1, makeId);
-            setIntOrNull(ps, 2, modelId);
-            setIntOrNull(ps, 3, caliberId);
-            setIntOrNull(ps, 4, useId);
-            ps.setInt(5, roundsOnHand);
-            if (unitCost == null) ps.setNull(6, Types.DECIMAL); else ps.setDouble(6, unitCost);
-            setIntOrNull(ps, 7, storageLocationId);
-            ps.setString(8, notes);
+            setIntOrNull(ps, 1, typeDefId);
+            ps.setInt(2, roundsOnHand);
+            if (unitCost == null) ps.setNull(3, Types.DECIMAL); else ps.setDouble(3, unitCost);
+            setIntOrNull(ps, 4, storageLocationId);
+            ps.setString(5, notes);
+            ps.setString(6, status == null || status.isBlank() ? "ACTIVE" : status);
             ps.executeUpdate();
             try (ResultSet keys = ps.getGeneratedKeys()) {
                 return keys.next() ? keys.getInt(1) : 0;
@@ -101,21 +97,19 @@ public class AmmunitionDao {
         }
     }
 
-    public void update(int ammoId, Integer makeId, Integer modelId, Integer caliberId, Integer useId,
-                       int roundsOnHand, Double unitCost, Integer storageLocationId, String notes) {
-        String sql = "UPDATE ammunition_inventory SET make_id=?, model_id=?, caliber_id=?, use_id=?, "
-                + "rounds_on_hand=?, unit_cost=?, storage_location_id=?, notes=? WHERE ammo_id=?";
+    public void update(int ammoId, Integer typeDefId, int roundsOnHand, Double unitCost,
+                       Integer storageLocationId, String notes, String status) {
+        String sql = "UPDATE ammunition_inventory SET type_def_id=?, "
+                + "rounds_on_hand=?, unit_cost=?, storage_location_id=?, notes=?, status=? WHERE ammo_id=?";
         try (Connection connection = DatabaseManager.getConnection();
              PreparedStatement ps = connection.prepareStatement(sql)) {
-            setIntOrNull(ps, 1, makeId);
-            setIntOrNull(ps, 2, modelId);
-            setIntOrNull(ps, 3, caliberId);
-            setIntOrNull(ps, 4, useId);
-            ps.setInt(5, roundsOnHand);
-            if (unitCost == null) ps.setNull(6, Types.DECIMAL); else ps.setDouble(6, unitCost);
-            setIntOrNull(ps, 7, storageLocationId);
-            ps.setString(8, notes);
-            ps.setInt(9, ammoId);
+            setIntOrNull(ps, 1, typeDefId);
+            ps.setInt(2, roundsOnHand);
+            if (unitCost == null) ps.setNull(3, Types.DECIMAL); else ps.setDouble(3, unitCost);
+            setIntOrNull(ps, 4, storageLocationId);
+            ps.setString(5, notes);
+            ps.setString(6, status == null || status.isBlank() ? "ACTIVE" : status);
+            ps.setInt(7, ammoId);
             ps.executeUpdate();
         } catch (SQLException ex) {
             throw new IllegalStateException("Failed to update ammunition row", ex);
@@ -140,17 +134,18 @@ public class AmmunitionDao {
 
     private static AmmoStockRecord map(ResultSet rs) throws SQLException {
         Double unitCost = rs.getObject("unit_cost") == null ? null : rs.getDouble("unit_cost");
-        Integer makeId = rs.getObject("make_id") == null ? null : rs.getInt("make_id");
-        Integer modelId = rs.getObject("model_id") == null ? null : rs.getInt("model_id");
-        Integer caliberId = rs.getObject("caliber_id") == null ? null : rs.getInt("caliber_id");
-        Integer useId = rs.getObject("use_id") == null ? null : rs.getInt("use_id");
+        Double costPerBox = rs.getObject("cost_per_box") == null ? null : rs.getDouble("cost_per_box");
+        Integer typeDefId = rs.getObject("type_def_id") == null ? null : rs.getInt("type_def_id");
+        Integer roundsPerBox = rs.getObject("rounds_per_box") == null ? null : rs.getInt("rounds_per_box");
         Integer storageId = rs.getObject("storage_location_id") == null ? null : rs.getInt("storage_location_id");
         return new AmmoStockRecord(
                 rs.getInt("ammo_id"),
-                makeId, rs.getString("make_name"),
-                modelId, rs.getString("model_name"),
-                caliberId, rs.getString("caliber_name"),
-                useId, rs.getString("use_name"),
+                typeDefId,
+                rs.getString("type_name"),
+                rs.getString("caliber_name"),
+                rs.getString("use_name"),
+                costPerBox,
+                roundsPerBox,
                 rs.getInt("rounds_on_hand"),
                 unitCost,
                 storageId, rs.getString("storage_name"),

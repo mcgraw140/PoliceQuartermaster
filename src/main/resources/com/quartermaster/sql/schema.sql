@@ -188,54 +188,40 @@ CREATE TABLE IF NOT EXISTS uniform_issuances (
 
 -- ---- Ammunition ---------------------------------------------------------
 
-CREATE TABLE IF NOT EXISTS ammo_makes (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(100) NOT NULL UNIQUE
-);
-
-CREATE TABLE IF NOT EXISTS ammo_models (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(150) NOT NULL UNIQUE
-);
-
-CREATE TABLE IF NOT EXISTS ammo_calibers (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(50) NOT NULL UNIQUE
-);
-
-CREATE TABLE IF NOT EXISTS ammo_uses (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(80) NOT NULL UNIQUE
-);
-
 CREATE TABLE IF NOT EXISTS ammo_reasons (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL UNIQUE
 );
 
-INSERT IGNORE INTO ammo_uses (name) VALUES ('Duty'), ('Training'), ('N/A');
 INSERT IGNORE INTO ammo_reasons (name) VALUES
     ('Duty'), ('Off Duty'), ('Order Received'), ('Partial Order Received'),
     ('Qualification'), ('Replenish Stock'), ('Returned to Inventory'),
     ('Stock Adjustment'), ('Training');
 
+-- Ammo type definitions: user-defined entries (caliber, type, use, cost/box, rounds/box)
+CREATE TABLE IF NOT EXISTS ammo_type_definitions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    caliber VARCHAR(100) NOT NULL,
+    type_name VARCHAR(100) NOT NULL,
+    use_type VARCHAR(20) NOT NULL DEFAULT 'Duty',
+    cost_per_box DECIMAL(10,2) NULL,
+    rounds_per_box INT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS ammunition_inventory (
     ammo_id INT AUTO_INCREMENT PRIMARY KEY,
-    make_id INT NULL,
-    model_id INT NULL,
-    caliber_id INT NULL,
-    use_id INT NULL,
+    type_def_id INT NULL,
     rounds_on_hand INT NOT NULL DEFAULT 0,
     unit_cost DECIMAL(10,2) NULL,
     storage_location_id INT NULL,
     notes VARCHAR(500) NULL,
     status ENUM('ACTIVE','ARCHIVED') NOT NULL DEFAULT 'ACTIVE',
-    CONSTRAINT fk_ammo_make    FOREIGN KEY (make_id)    REFERENCES ammo_makes(id)        ON DELETE SET NULL,
-    CONSTRAINT fk_ammo_model   FOREIGN KEY (model_id)   REFERENCES ammo_models(id)       ON DELETE SET NULL,
-    CONSTRAINT fk_ammo_caliber FOREIGN KEY (caliber_id) REFERENCES ammo_calibers(id)     ON DELETE SET NULL,
-    CONSTRAINT fk_ammo_use     FOREIGN KEY (use_id)     REFERENCES ammo_uses(id)         ON DELETE SET NULL,
-    CONSTRAINT fk_ammo_storage FOREIGN KEY (storage_location_id) REFERENCES storage_locations(id) ON DELETE SET NULL
+    CONSTRAINT fk_ammo_type_def FOREIGN KEY (type_def_id) REFERENCES ammo_type_definitions(id) ON DELETE SET NULL,
+    CONSTRAINT fk_ammo_storage  FOREIGN KEY (storage_location_id) REFERENCES storage_locations(id) ON DELETE SET NULL
 );
+
+ALTER TABLE ammunition_inventory ADD COLUMN IF NOT EXISTS type_def_id INT NULL;
 
 CREATE TABLE IF NOT EXISTS ammunition_issuances (
     id INT AUTO_INCREMENT PRIMARY KEY,

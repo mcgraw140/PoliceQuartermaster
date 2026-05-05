@@ -1,5 +1,6 @@
 package com.quartermaster.controller;
 
+import com.quartermaster.dao.AmmoIssuanceDao;
 import com.quartermaster.dao.UniformIssuanceDao;
 import com.quartermaster.model.EquipmentItem;
 import com.quartermaster.model.IssuanceAdminRow;
@@ -407,6 +408,134 @@ public final class PrintHtmlFactory {
                 newSection,
                 rows,
                 escapeHtml(String.format("$%.2f", currentTotalCost)),
+                escapeHtml(adminName),
+                escapeHtml(officer.getName())
+        );
+    }
+
+    public static String buildAmmoIssuancePrintHtml(String agencyName,
+                                                    String adminName,
+                                                    Officer officer,
+                                                    List<AmmoIssuanceDao.AmmoIssuanceRow> currentIssued,
+                                                    List<AmmoIssuanceDao.AmmoIssuanceRow> issuedThisAction) {
+        DateTimeFormatter ts = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+        String printedAt = LocalDateTime.now().format(ts);
+
+        StringBuilder rows = new StringBuilder();
+        int totalRounds = 0;
+        for (AmmoIssuanceDao.AmmoIssuanceRow row : currentIssued) {
+            String issuedDate = row.issuedAt() == null ? "" : row.issuedAt().format(ts);
+            String unitCost = row.unitCostAtIssue() == null ? "" : String.format("$%.2f", row.unitCostAtIssue());
+            rows.append("<tr>")
+                    .append("<td>").append(escapeHtml(row.typeName())).append("</td>")
+                    .append("<td>").append(escapeHtml(row.caliberName())).append("</td>")
+                    .append("<td>").append(row.rounds()).append("</td>")
+                    .append("<td>").append(escapeHtml(unitCost)).append("</td>")
+                    .append("<td>").append(escapeHtml(row.reasonName())).append("</td>")
+                    .append("<td>").append(escapeHtml(issuedDate)).append("</td>")
+                    .append("</tr>");
+            totalRounds += row.rounds();
+        }
+
+        StringBuilder newRows = new StringBuilder();
+        if (issuedThisAction != null) {
+            for (AmmoIssuanceDao.AmmoIssuanceRow row : issuedThisAction) {
+                String issuedDate = row.issuedAt() == null ? "" : row.issuedAt().format(ts);
+                String unitCost = row.unitCostAtIssue() == null ? "" : String.format("$%.2f", row.unitCostAtIssue());
+                newRows.append("<tr>")
+                    .append("<td>").append(escapeHtml(row.typeName())).append("</td>")
+                        .append("<td>").append(escapeHtml(row.caliberName())).append("</td>")
+                        .append("<td>").append(row.rounds()).append("</td>")
+                        .append("<td>").append(escapeHtml(unitCost)).append("</td>")
+                        .append("<td>").append(escapeHtml(row.reasonName())).append("</td>")
+                        .append("<td>").append(escapeHtml(issuedDate)).append("</td>")
+                        .append("</tr>");
+            }
+        }
+
+        String newSection = newRows.isEmpty()
+                ? ""
+                : """
+                                    <h2 style=\"margin-top: 20px; margin-bottom: 6px; font-size: 20px;\">Newly Issued (This Action)</h2>
+                                    <table>
+                                        <thead>
+                                            <tr>
+                                                <th>Type</th>
+                                                <th>Caliber</th>
+                                                <th>Rounds</th>
+                                                <th>Unit Cost</th>
+                                                <th>Reason</th>
+                                                <th>Issued</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            %s
+                                        </tbody>
+                                    </table>
+                                """.formatted(newRows);
+
+        return """
+                                <!doctype html>
+                                <html lang=\"en\">
+                                <head>
+                                    <meta charset=\"utf-8\" />
+                                    <title>%s - Ammunition Issuance Sign-Off</title>
+                                    <style>
+                                        body { font-family: Segoe UI, Tahoma, Arial, sans-serif; margin: 20px; color: #111; }
+                                        h1 { margin: 0; font-size: 28px; }
+                                        h2 { margin: 6px 0 10px 0; font-size: 20px; }
+                                        .meta { margin: 4px 0; font-size: 14px; }
+                                        table { width: 100%%; border-collapse: collapse; margin-top: 12px; }
+                                        th, td { border: 1px solid #444; padding: 8px; text-align: left; font-size: 13px; }
+                                        th { background: #efefef; }
+                                        .sign { margin-top: 24px; font-size: 16px; }
+                                        .total { margin-top: 8px; font-size: 14px; font-weight: bold; }
+                                        @media print { body { margin: 14px; } }
+                                    </style>
+                                </head>
+                                <body onload=\"setTimeout(function(){ window.print(); }, 200);\">
+                                    <h1>%s</h1>
+                                    <h2>Ammunition Issuance Sign-Off</h2>
+                                    <div class=\"meta\"><strong>Printed:</strong> %s</div>
+                                    <div class=\"meta\"><strong>Officer:</strong> %s (Badge %s)</div>
+                                    <div class=\"meta\"><strong>Rank:</strong> %s</div>
+                                    <div class=\"meta\"><strong>Prepared By:</strong> %s</div>
+                                    <div class=\"meta\"><strong>Currently Issued Rows:</strong> %s</div>
+                                    %s
+                                    <h2 style=\"margin-top: 16px; margin-bottom: 6px; font-size: 20px;\">Currently Issued Ammunition</h2>
+                                    <table>
+                                        <thead>
+                                            <tr>
+                                                <th>Type</th>
+                                                <th>Caliber</th>
+                                                <th>Rounds</th>
+                                                <th>Unit Cost</th>
+                                                <th>Reason</th>
+                                                <th>Issued</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            %s
+                                        </tbody>
+                                    </table>
+                                    <div class=\"total\">Total Rounds Currently Issued: %d</div>
+                                    <p style=\"margin-top: 14px; font-size: 12px;\"><strong>Officer Responsibility:</strong> Officer accepts custody of and responsibility for issued ammunition listed above. Ammunition must be accounted for according to agency policy.</p>
+                                    <div class=\"sign\">Issued By (%s): ________________________________  Date: ____________</div>
+                                    <div class=\"sign\">Officer Signature (%s): ________________________________  Date: ____________</div>
+                                </body>
+                                </html>
+                                """.formatted(
+                escapeHtml(agencyName),
+                escapeHtml(agencyName),
+                escapeHtml(printedAt),
+                escapeHtml(officer.getName()),
+                escapeHtml(officer.getBadgeNumber()),
+                escapeHtml(officer.getRank()),
+                escapeHtml(adminName),
+                currentIssued.size(),
+                newSection,
+                rows,
+                totalRounds,
                 escapeHtml(adminName),
                 escapeHtml(officer.getName())
         );

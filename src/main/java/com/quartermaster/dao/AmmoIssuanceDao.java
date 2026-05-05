@@ -17,8 +17,7 @@ public class AmmoIssuanceDao {
 
     public record AmmoIssuanceRow(int id,
                                   int ammoId,
-                                  String makeName,
-                                  String modelName,
+                                  String typeName,
                                   String caliberName,
                                   int rounds,
                                   Double unitCostAtIssue,
@@ -124,6 +123,28 @@ public class AmmoIssuanceDao {
                 ps -> ps.setInt(1, officerId));
     }
 
+    public List<AmmoIssuanceRow> findAllByOfficer(int officerId) {
+        return query("WHERE ai.officer_id = ? ORDER BY ai.issued_at DESC",
+                ps -> ps.setInt(1, officerId));
+    }
+
+    public boolean markExpended(int issuanceId, Integer userId) {
+        String sql = "UPDATE ammunition_issuances SET status='EXPENDED', returned_at=CURRENT_TIMESTAMP, "
+                + "returned_by_user_id=? WHERE id=? AND status='ISSUED'";
+        try (Connection connection = DatabaseManager.getConnection();
+             PreparedStatement ps = connection.prepareStatement(sql)) {
+            if (userId == null) {
+                ps.setNull(1, Types.INTEGER);
+            } else {
+                ps.setInt(1, userId);
+            }
+            ps.setInt(2, issuanceId);
+            return ps.executeUpdate() > 0;
+        } catch (SQLException ex) {
+            throw new IllegalStateException("Failed to mark ammunition issuance expended", ex);
+        }
+    }
+
     public List<AmmoIssuanceRow> findByIds(List<Integer> ids) {
         if (ids == null || ids.isEmpty()) return List.of();
         StringBuilder placeholders = new StringBuilder();
@@ -145,14 +166,12 @@ public class AmmoIssuanceDao {
                        ai.issued_at, ai.returned_at, ai.status,
                        u_iss.username  AS issued_by_name,
                        u_ret.username  AS returned_by_name,
-                       mk.name AS make_name, md.name AS model_name, cb.name AS caliber_name,
+                       atd.type_name AS type_name, atd.caliber AS caliber_name,
                        rs.name AS reason_name,
                        o.officer_id, o.name AS officer_name, o.badge_number
                 FROM ammunition_issuances ai
                 JOIN ammunition_inventory inv ON inv.ammo_id = ai.ammo_id
-                LEFT JOIN ammo_makes    mk ON mk.id = inv.make_id
-                LEFT JOIN ammo_models   md ON md.id = inv.model_id
-                LEFT JOIN ammo_calibers cb ON cb.id = inv.caliber_id
+                  LEFT JOIN ammo_type_definitions atd ON atd.id = inv.type_def_id
                 LEFT JOIN ammo_reasons  rs ON rs.id = ai.reason_id
                 JOIN officers o ON o.officer_id = ai.officer_id
                 LEFT JOIN users u_iss ON u_iss.user_id = ai.issued_by_user_id
@@ -172,8 +191,7 @@ public class AmmoIssuanceDao {
                     rows.add(new AmmoIssuanceRow(
                             rs.getInt("id"),
                             rs.getInt("ammo_id"),
-                            rs.getString("make_name"),
-                            rs.getString("model_name"),
+                            rs.getString("type_name"),
                             rs.getString("caliber_name"),
                             rs.getInt("rounds"),
                             unitCost,

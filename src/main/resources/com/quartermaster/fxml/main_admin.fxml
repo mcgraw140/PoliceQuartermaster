@@ -315,6 +315,29 @@
                 <VBox fx:id="moduleAmmunitionPane" spacing="12" visible="false" managed="false" styleClass="page-content">
                     <Label fx:id="ammoModuleTitleLabel" text="Ammunition Stock" styleClass="page-title"/>
 
+                    <!-- Ammo Types sub-pane -->
+                    <VBox fx:id="ammoTypesPane" spacing="12" visible="false" managed="false" VBox.vgrow="ALWAYS">
+                        <VBox styleClass="card" spacing="10" VBox.vgrow="ALWAYS">
+                            <HBox alignment="CENTER_LEFT" spacing="10">
+                                <Label text="Ammo Type Definitions" styleClass="section-title"/>
+                                <Region HBox.hgrow="ALWAYS"/>
+                                <Button text="Add"    onAction="#onAddAmmoTypeDef"    styleClass="btn-primary"/>
+                                <Button text="Edit"   onAction="#onEditAmmoTypeDef"   styleClass="btn-secondary"/>
+                                <Button text="Delete" onAction="#onDeleteAmmoTypeDef" styleClass="btn-danger"/>
+                            </HBox>
+                            <Label text="Define ammo types here. Select them when adding stock." styleClass="muted"/>
+                            <TableView fx:id="ammoTypesTable" VBox.vgrow="ALWAYS" styleClass="app-table">
+                                <columns>
+                                    <TableColumn fx:id="ammoTypeDefCaliberColumn"  text="Caliber"      prefWidth="160"/>
+                                    <TableColumn fx:id="ammoTypeDefTypeColumn"     text="Type"         prefWidth="160"/>
+                                    <TableColumn fx:id="ammoTypeDefUseColumn"      text="Use"          prefWidth="100"/>
+                                    <TableColumn fx:id="ammoTypeDefCostColumn"     text="Cost / Box"   prefWidth="120"/>
+                                    <TableColumn fx:id="ammoTypeDefRoundsColumn"   text="Rounds / Box" prefWidth="120"/>
+                                </columns>
+                            </TableView>
+                        </VBox>
+                    </VBox>
+
                     <!-- Stock sub-pane -->
                     <VBox fx:id="ammoStockPane" spacing="12" VBox.vgrow="ALWAYS">
                         <VBox styleClass="card" spacing="10" VBox.vgrow="ALWAYS">
@@ -327,14 +350,14 @@
                             </HBox>
                             <TableView fx:id="ammoStockTable" VBox.vgrow="ALWAYS" styleClass="app-table">
                                 <columns>
-                                    <TableColumn fx:id="ammoMakeColumn"     text="Make"           prefWidth="160"/>
-                                    <TableColumn fx:id="ammoModelColumn"    text="Model"          prefWidth="220"/>
-                                    <TableColumn fx:id="ammoCaliberColumn"  text="Caliber"        prefWidth="100"/>
-                                    <TableColumn fx:id="ammoUseColumn"      text="Use"            prefWidth="110"/>
+                                    <TableColumn fx:id="ammoCaliberColumn"  text="Caliber"        prefWidth="160"/>
+                                    <TableColumn fx:id="ammoTypeColumn"     text="Type"           prefWidth="140"/>
+                                    <TableColumn fx:id="ammoUseColumn"      text="Use"            prefWidth="100"/>
                                     <TableColumn fx:id="ammoRoundsColumn"   text="Rounds on Hand" prefWidth="130"/>
                                     <TableColumn fx:id="ammoUnitCostColumn" text="Unit Cost"      prefWidth="100"/>
                                     <TableColumn fx:id="ammoStorageColumn"  text="Storage"        prefWidth="140"/>
                                     <TableColumn fx:id="ammoNotesColumn"    text="Notes"          prefWidth="200"/>
+                                    <TableColumn fx:id="ammoStatusColumn"   text="Status"         prefWidth="100"/>
                                 </columns>
                             </TableView>
                         </VBox>
@@ -345,6 +368,7 @@
                         <VBox styleClass="card" spacing="10">
                             <HBox alignment="CENTER_LEFT" spacing="10">
                                 <Label text="Issue / Return Ammunition" styleClass="section-title"/>
+                                <CheckBox fx:id="ammoShowHistoryCheckBox" text="Show Historical"/>
                                 <Region HBox.hgrow="ALWAYS"/>
                                 <Button text="Save Issue / Returns" onAction="#onSaveAmmoIssue" styleClass="btn-primary"/>
                                 <Button text="Print Sign-Off" onAction="#onPrintAmmoSignOff" styleClass="btn-secondary"/>
@@ -367,9 +391,8 @@
                                 <Label text="Select a row, set rounds + reason, click Add to Issue." styleClass="muted"/>
                                 <TableView fx:id="ammoIssueAvailableTable" VBox.vgrow="ALWAYS" styleClass="app-table">
                                     <columns>
-                                        <TableColumn fx:id="ammoIssueMakeColumn"    text="Make"     prefWidth="140"/>
-                                        <TableColumn fx:id="ammoIssueModelColumn"   text="Model"    prefWidth="180"/>
-                                        <TableColumn fx:id="ammoIssueCaliberColumn" text="Caliber"  prefWidth="90"/>
+                                        <TableColumn fx:id="ammoIssueTypeColumn"    text="Type"     prefWidth="140"/>
+                                        <TableColumn fx:id="ammoIssueCaliberColumn" text="Caliber"  prefWidth="160"/>
                                         <TableColumn fx:id="ammoIssueUseColumn"     text="Use"      prefWidth="100"/>
                                         <TableColumn fx:id="ammoIssueRoundsColumn"  text="Rounds"   prefWidth="90"/>
                                         <TableColumn fx:id="ammoIssueStorageColumn" text="Storage"  prefWidth="120"/>
@@ -381,14 +404,14 @@
                                 <HBox alignment="CENTER_LEFT" spacing="10">
                                     <Label text="Issued To Selected Officer" styleClass="section-title"/>
                                     <Region HBox.hgrow="ALWAYS"/>
+                                    <Button text="Mark Expended" onAction="#onMarkAmmoExpended" styleClass="btn-secondary"/>
                                     <Button text="Remove Selected" onAction="#onRemoveAmmoIssue" styleClass="btn-danger"/>
                                 </HBox>
                                 <Label fx:id="ammoIssuedToOfficerLabel" text="Select an officer to view issued ammunition." styleClass="muted"/>
                                 <TableView fx:id="ammoIssuedTable" VBox.vgrow="ALWAYS" styleClass="app-table">
                                     <columns>
-                                        <TableColumn fx:id="ammoIssuedMakeColumn"    text="Make"     prefWidth="140"/>
-                                        <TableColumn fx:id="ammoIssuedModelColumn"   text="Model"    prefWidth="160"/>
-                                        <TableColumn fx:id="ammoIssuedCaliberColumn" text="Caliber"  prefWidth="80"/>
+                                        <TableColumn fx:id="ammoIssuedTypeColumn"    text="Type"     prefWidth="140"/>
+                                        <TableColumn fx:id="ammoIssuedCaliberColumn" text="Caliber"  prefWidth="160"/>
                                         <TableColumn fx:id="ammoIssuedRoundsColumn"  text="Rounds"   prefWidth="80"/>
                                         <TableColumn fx:id="ammoIssuedReasonColumn"  text="Reason"   prefWidth="120"/>
                                         <TableColumn fx:id="ammoIssuedDateColumn"    text="Issued"   prefWidth="140"/>

@@ -4,6 +4,7 @@ import com.quartermaster.Main;
 import com.quartermaster.auth.SessionManager;
 import com.quartermaster.auth.UserRole;
 import com.quartermaster.dao.AmmoIssuanceDao;
+import com.quartermaster.dao.AmmoTypeDefinitionDao;
 import com.quartermaster.dao.AmmunitionDao;
 import com.quartermaster.dao.EquipmentDao;
 import com.quartermaster.dao.EquipmentDao.UniformCategory;
@@ -65,6 +66,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -86,6 +88,7 @@ public class AdminController {
     }
 
     private enum AmmoSubTab {
+        TYPES,
         STOCK,
         ISSUE
     }
@@ -211,6 +214,50 @@ public class AdminController {
     private TableColumn<UniformIssuanceDao.UniformIssuanceRow, String> uniformIssuedDateColumn;
     @FXML
     private TableColumn<UniformIssuanceDao.UniformIssuanceRow, String> uniformIssuedByColumn;
+
+    // ===== Ammunition module =====
+    @FXML private VBox moduleAmmunitionPane;
+    @FXML private Label ammoModuleTitleLabel;
+    @FXML private VBox ammoTypesPane;
+    @FXML private VBox ammoStockPane;
+    @FXML private VBox ammoIssuePane;
+
+    @FXML private TableView<AmmoTypeDefinitionDao.AmmoTypeDefRecord> ammoTypesTable;
+    @FXML private TableColumn<AmmoTypeDefinitionDao.AmmoTypeDefRecord, String> ammoTypeDefCaliberColumn;
+    @FXML private TableColumn<AmmoTypeDefinitionDao.AmmoTypeDefRecord, String> ammoTypeDefTypeColumn;
+    @FXML private TableColumn<AmmoTypeDefinitionDao.AmmoTypeDefRecord, String> ammoTypeDefUseColumn;
+    @FXML private TableColumn<AmmoTypeDefinitionDao.AmmoTypeDefRecord, String> ammoTypeDefCostColumn;
+    @FXML private TableColumn<AmmoTypeDefinitionDao.AmmoTypeDefRecord, String> ammoTypeDefRoundsColumn;
+
+    @FXML private TableView<AmmunitionDao.AmmoStockRecord> ammoStockTable;
+    @FXML private TableColumn<AmmunitionDao.AmmoStockRecord, String> ammoTypeColumn;
+    @FXML private TableColumn<AmmunitionDao.AmmoStockRecord, String> ammoCaliberColumn;
+    @FXML private TableColumn<AmmunitionDao.AmmoStockRecord, String> ammoUseColumn;
+    @FXML private TableColumn<AmmunitionDao.AmmoStockRecord, String> ammoRoundsColumn;
+    @FXML private TableColumn<AmmunitionDao.AmmoStockRecord, String> ammoUnitCostColumn;
+    @FXML private TableColumn<AmmunitionDao.AmmoStockRecord, String> ammoStorageColumn;
+    @FXML private TableColumn<AmmunitionDao.AmmoStockRecord, String> ammoNotesColumn;
+    @FXML private TableColumn<AmmunitionDao.AmmoStockRecord, String> ammoStatusColumn;
+
+    @FXML private ComboBox<Officer> ammoIssueOfficerCombo;
+    @FXML private ComboBox<LookupItem> ammoIssueReasonCombo;
+    @FXML private CheckBox ammoShowHistoryCheckBox;
+    @FXML private TextField ammoIssueRoundsField;
+    @FXML private TableView<AmmunitionDao.AmmoStockRecord> ammoIssueAvailableTable;
+    @FXML private TableColumn<AmmunitionDao.AmmoStockRecord, String> ammoIssueTypeColumn;
+    @FXML private TableColumn<AmmunitionDao.AmmoStockRecord, String> ammoIssueCaliberColumn;
+    @FXML private TableColumn<AmmunitionDao.AmmoStockRecord, String> ammoIssueUseColumn;
+    @FXML private TableColumn<AmmunitionDao.AmmoStockRecord, String> ammoIssueRoundsColumn;
+    @FXML private TableColumn<AmmunitionDao.AmmoStockRecord, String> ammoIssueStorageColumn;
+
+    @FXML private Label ammoIssuedToOfficerLabel;
+    @FXML private TableView<AmmoIssuanceDao.AmmoIssuanceRow> ammoIssuedTable;
+    @FXML private TableColumn<AmmoIssuanceDao.AmmoIssuanceRow, String> ammoIssuedTypeColumn;
+    @FXML private TableColumn<AmmoIssuanceDao.AmmoIssuanceRow, String> ammoIssuedCaliberColumn;
+    @FXML private TableColumn<AmmoIssuanceDao.AmmoIssuanceRow, String> ammoIssuedRoundsColumn;
+    @FXML private TableColumn<AmmoIssuanceDao.AmmoIssuanceRow, String> ammoIssuedReasonColumn;
+    @FXML private TableColumn<AmmoIssuanceDao.AmmoIssuanceRow, String> ammoIssuedDateColumn;
+    @FXML private TableColumn<AmmoIssuanceDao.AmmoIssuanceRow, String> ammoIssuedStatusColumn;
 
     @FXML
     private Label inventoryModuleTitleLabel;
@@ -515,9 +562,17 @@ public class AdminController {
     private final EquipmentDao equipmentDao = new EquipmentDao();
     private final IssuanceDao issuanceDao = new IssuanceDao();
     private final UniformIssuanceDao uniformIssuanceDao = new UniformIssuanceDao();
+    private final AmmunitionDao ammunitionDao = new AmmunitionDao();
+    private final AmmoIssuanceDao ammoIssuanceDao = new AmmoIssuanceDao();
+    private final AmmoTypeDefinitionDao ammoTypeDefinitionDao = new AmmoTypeDefinitionDao();
     private final java.util.Map<Integer, PendingUniformIssue> pendingUniformIssuesByTempId = new java.util.LinkedHashMap<>();
     private final java.util.Set<Integer> pendingUniformReturnIds = new java.util.LinkedHashSet<>();
     private int nextPendingUniformIssueTempId = -1;
+    private final java.util.Map<Integer, PendingAmmoIssue> pendingAmmoIssuesByTempId = new java.util.LinkedHashMap<>();
+    private final java.util.Set<Integer> pendingAmmoReturnIds = new java.util.LinkedHashSet<>();
+    private final java.util.Set<Integer> pendingAmmoExpendedIds = new java.util.LinkedHashSet<>();
+    private int nextPendingAmmoIssueTempId = -1;
+    private boolean suppressAmmoOfficerSelectionListener = false;
 
     private record PendingUniformIssue(int tempId,
                                        int uniformId,
@@ -528,6 +583,16 @@ public class AdminController {
                                        String sizeName,
                                        int quantity,
                                        Double unitCost) {
+    }
+
+    private record PendingAmmoIssue(int tempId,
+                                    int ammoId,
+                                    String typeName,
+                                    String caliberName,
+                                    int rounds,
+                                    Double unitCost,
+                                    Integer reasonId,
+                                    String reasonName) {
     }
     private final OfficerDao officerDao = new OfficerDao();
     private final UserDao userDao = new UserDao();
@@ -558,6 +623,7 @@ public class AdminController {
         setupFilters();
         setupAddEquipmentPage();
         setupUniformTabs();
+        setupAmmunitionTabs();
         setupLookupAdmin();
         loadAgencySettings();
         issueDatePicker.setValue(LocalDate.now());
@@ -571,6 +637,7 @@ public class AdminController {
         activeMainTab = MainTab.EQUIPMENT;
         UiNavSupport.setPaneVisible(moduleInventoryPane, true);
         UiNavSupport.setPaneVisible(moduleUniformPane, false);
+        UiNavSupport.setPaneVisible(moduleAmmunitionPane, false);
         UiNavSupport.setPaneVisible(moduleIssuePane, false);
         UiNavSupport.setPaneVisible(moduleFleetPane, false);
         UiNavSupport.setPaneVisible(moduleAdminPane, false);
@@ -584,6 +651,7 @@ public class AdminController {
         activeMainTab = MainTab.UNIFORM;
         UiNavSupport.setPaneVisible(moduleInventoryPane, false);
         UiNavSupport.setPaneVisible(moduleUniformPane, true);
+        UiNavSupport.setPaneVisible(moduleAmmunitionPane, false);
         UiNavSupport.setPaneVisible(moduleIssuePane, false);
         UiNavSupport.setPaneVisible(moduleFleetPane, false);
         UiNavSupport.setPaneVisible(moduleAdminPane, false);
@@ -593,10 +661,24 @@ public class AdminController {
     }
 
     @FXML
+    public void onTopTabAmmunition() {
+        activeMainTab = MainTab.AMMUNITION;
+        UiNavSupport.setPaneVisible(moduleInventoryPane, false);
+        UiNavSupport.setPaneVisible(moduleUniformPane, false);
+        UiNavSupport.setPaneVisible(moduleAmmunitionPane, true);
+        UiNavSupport.setPaneVisible(moduleIssuePane, false);
+        UiNavSupport.setPaneVisible(moduleFleetPane, false);
+        UiNavSupport.setPaneVisible(moduleAdminPane, false);
+        applyTopTabStyles();
+        showAmmunitionSubNav(AmmoSubTab.TYPES);
+    }
+
+    @FXML
     public void onTopTabIssueReturn() {
         activeMainTab = MainTab.ISSUE_RETURN;
         UiNavSupport.setPaneVisible(moduleInventoryPane, false);
         UiNavSupport.setPaneVisible(moduleUniformPane, false);
+        UiNavSupport.setPaneVisible(moduleAmmunitionPane, false);
         UiNavSupport.setPaneVisible(moduleIssuePane, true);
         UiNavSupport.setPaneVisible(moduleFleetPane, false);
         UiNavSupport.setPaneVisible(moduleAdminPane, false);
@@ -610,6 +692,7 @@ public class AdminController {
         activeMainTab = MainTab.ADMIN;
         UiNavSupport.setPaneVisible(moduleInventoryPane, false);
         UiNavSupport.setPaneVisible(moduleUniformPane, false);
+        UiNavSupport.setPaneVisible(moduleAmmunitionPane, false);
         UiNavSupport.setPaneVisible(moduleIssuePane, false);
         UiNavSupport.setPaneVisible(moduleFleetPane, false);
         UiNavSupport.setPaneVisible(moduleAdminPane, true);
@@ -622,6 +705,7 @@ public class AdminController {
         activeMainTab = MainTab.VEHICLE;
         UiNavSupport.setPaneVisible(moduleInventoryPane, false);
         UiNavSupport.setPaneVisible(moduleUniformPane, false);
+        UiNavSupport.setPaneVisible(moduleAmmunitionPane, false);
         UiNavSupport.setPaneVisible(moduleIssuePane, false);
         UiNavSupport.setPaneVisible(moduleFleetPane, true);
         UiNavSupport.setPaneVisible(moduleAdminPane, false);
@@ -2148,16 +2232,696 @@ public class AdminController {
     }
 
     private void applyTopTabStyles() {
-        List<Button> buttons = List.of(topTabEquipment, topTabUniform, topTabIssueReturn, topTabAdmin, topTabVehicle);
+        List<Button> buttons = List.of(topTabEquipment, topTabUniform, topTabAmmunition, topTabIssueReturn, topTabAdmin, topTabVehicle);
         UiNavSupport.clearActive(buttons);
 
         switch (activeMainTab) {
             case EQUIPMENT -> topTabEquipment.getStyleClass().add("active");
             case UNIFORM -> topTabUniform.getStyleClass().add("active");
+            case AMMUNITION -> topTabAmmunition.getStyleClass().add("active");
             case ISSUE_RETURN -> topTabIssueReturn.getStyleClass().add("active");
             case ADMIN -> topTabAdmin.getStyleClass().add("active");
             case VEHICLE -> topTabVehicle.getStyleClass().add("active");
         }
+    }
+
+    private void setupAmmunitionTabs() {
+        if (ammoStockTable == null) {
+            return;
+        }
+        // Ammo type definitions table
+        if (ammoTypesTable != null) {
+            ammoTypeDefCaliberColumn.setCellValueFactory(c -> Bindings.createStringBinding(() -> safe(c.getValue().caliber())));
+            ammoTypeDefTypeColumn.setCellValueFactory(c -> Bindings.createStringBinding(() -> safe(c.getValue().typeName())));
+            ammoTypeDefUseColumn.setCellValueFactory(c -> Bindings.createStringBinding(() -> safe(c.getValue().useType())));
+            ammoTypeDefCostColumn.setCellValueFactory(c -> Bindings.createStringBinding(() ->
+                c.getValue().costPerBox() == null ? "" : String.format("$%.2f", c.getValue().costPerBox())));
+            ammoTypeDefRoundsColumn.setCellValueFactory(c -> Bindings.createStringBinding(() ->
+                c.getValue().roundsPerBox() == null ? "" : String.valueOf(c.getValue().roundsPerBox())));
+        }
+        ammoTypeColumn.setCellValueFactory(c -> Bindings.createStringBinding(() -> safe(c.getValue().typeName())));
+        ammoCaliberColumn.setCellValueFactory(c -> Bindings.createStringBinding(() -> safe(c.getValue().caliberName())));
+        ammoUseColumn.setCellValueFactory(c -> Bindings.createStringBinding(() -> safe(c.getValue().useName())));
+        ammoRoundsColumn.setCellValueFactory(c -> Bindings.createStringBinding(() -> String.valueOf(c.getValue().roundsOnHand())));
+        ammoUnitCostColumn.setCellValueFactory(c -> Bindings.createStringBinding(() -> c.getValue().unitCost() == null ? "" : String.format("$%.2f", c.getValue().unitCost())));
+        ammoStorageColumn.setCellValueFactory(c -> Bindings.createStringBinding(() -> safe(c.getValue().storageLocationName())));
+        ammoNotesColumn.setCellValueFactory(c -> Bindings.createStringBinding(() -> safe(c.getValue().notes())));
+        ammoStatusColumn.setCellValueFactory(c -> Bindings.createStringBinding(() -> safe(c.getValue().status())));
+
+        ammoIssueTypeColumn.setCellValueFactory(c -> Bindings.createStringBinding(() -> safe(c.getValue().typeName())));
+        ammoIssueCaliberColumn.setCellValueFactory(c -> Bindings.createStringBinding(() -> safe(c.getValue().caliberName())));
+        ammoIssueUseColumn.setCellValueFactory(c -> Bindings.createStringBinding(() -> safe(c.getValue().useName())));
+        ammoIssueRoundsColumn.setCellValueFactory(c -> Bindings.createStringBinding(() -> String.valueOf(c.getValue().roundsOnHand())));
+        ammoIssueStorageColumn.setCellValueFactory(c -> Bindings.createStringBinding(() -> safe(c.getValue().storageLocationName())));
+
+        ammoIssuedTypeColumn.setCellValueFactory(c -> Bindings.createStringBinding(() -> safe(c.getValue().typeName())));
+        ammoIssuedCaliberColumn.setCellValueFactory(c -> Bindings.createStringBinding(() -> safe(c.getValue().caliberName())));
+        ammoIssuedRoundsColumn.setCellValueFactory(c -> Bindings.createStringBinding(() -> String.valueOf(c.getValue().rounds())));
+        ammoIssuedReasonColumn.setCellValueFactory(c -> Bindings.createStringBinding(() -> safe(c.getValue().reasonName())));
+        ammoIssuedDateColumn.setCellValueFactory(c -> Bindings.createStringBinding(() ->
+            c.getValue().issuedAt() == null ? "" :
+                c.getValue().issuedAt().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))));
+        ammoIssuedStatusColumn.setCellValueFactory(c -> Bindings.createStringBinding(() -> safe(c.getValue().status())));
+
+        ammoIssueOfficerCombo.setCellFactory(listView -> new javafx.scene.control.ListCell<>() {
+            @Override
+            protected void updateItem(Officer item, boolean empty) {
+                super.updateItem(item, empty);
+                setText(empty || item == null ? null : item.getName() + " (" + item.getBadgeNumber() + ")");
+            }
+        });
+        ammoIssueOfficerCombo.setButtonCell(ammoIssueOfficerCombo.getCellFactory().call(null));
+        ammoIssueOfficerCombo.valueProperty().addListener((obs, oldVal, newVal) -> {
+            if (suppressAmmoOfficerSelectionListener) {
+                return;
+            }
+            clearPendingAmmoChanges();
+            refreshAmmunition(false);
+        });
+
+        ammoIssueReasonCombo.setCellFactory(listView -> new javafx.scene.control.ListCell<>() {
+            @Override
+            protected void updateItem(LookupItem item, boolean empty) {
+                super.updateItem(item, empty);
+                setText(empty || item == null ? null : item.getName());
+            }
+        });
+        ammoIssueReasonCombo.setButtonCell(ammoIssueReasonCombo.getCellFactory().call(null));
+
+        if (ammoShowHistoryCheckBox != null) {
+            ammoShowHistoryCheckBox.selectedProperty().addListener((obs, oldVal, newVal) -> refreshAmmunitionIssuedToOfficer());
+        }
+    }
+
+    private void showAmmunitionSubNav(AmmoSubTab subTab) {
+        if (moduleNavBar == null || moduleNavLabel == null) {
+            return;
+        }
+        moduleNavLabel.setText("Ammunition");
+        Button typesButton = UiNavSupport.createSubNavButton("Ammo Types", () -> switchAmmunitionSubTab(AmmoSubTab.TYPES));
+        Button stockButton = UiNavSupport.createSubNavButton("Ammo Stock", () -> switchAmmunitionSubTab(AmmoSubTab.STOCK));
+        Button issueButton = UiNavSupport.createSubNavButton("Issue", () -> switchAmmunitionSubTab(AmmoSubTab.ISSUE));
+        moduleNavBar.getChildren().setAll(moduleNavLabel, typesButton, stockButton, issueButton);
+        switchAmmunitionSubTab(subTab);
+    }
+
+    private void switchAmmunitionSubTab(AmmoSubTab subTab) {
+        List<Button> buttons = UiNavSupport.getSubNavButtons(moduleNavBar);
+        UiNavSupport.clearActive(buttons);
+        switch (subTab) {
+            case TYPES -> {
+                ammoModuleTitleLabel.setText("Ammo Type Definitions");
+                UiNavSupport.setPaneVisible(ammoTypesPane, true);
+                UiNavSupport.setPaneVisible(ammoStockPane, false);
+                UiNavSupport.setPaneVisible(ammoIssuePane, false);
+                UiNavSupport.activateButtonByIndex(buttons, 0);
+                refreshAmmoTypeDefs();
+            }
+            case STOCK -> {
+                ammoModuleTitleLabel.setText("Ammunition Stock");
+                UiNavSupport.setPaneVisible(ammoTypesPane, false);
+                UiNavSupport.setPaneVisible(ammoStockPane, true);
+                UiNavSupport.setPaneVisible(ammoIssuePane, false);
+                UiNavSupport.activateButtonByIndex(buttons, 1);
+            }
+            case ISSUE -> {
+                ammoModuleTitleLabel.setText("Issue / Return Ammunition");
+                UiNavSupport.setPaneVisible(ammoTypesPane, false);
+                UiNavSupport.setPaneVisible(ammoStockPane, false);
+                UiNavSupport.setPaneVisible(ammoIssuePane, true);
+                UiNavSupport.activateButtonByIndex(buttons, 2);
+                refreshAmmunition();
+            }
+        }
+    }
+
+    private void refreshAmmunition() {
+        refreshAmmunition(true);
+    }
+
+    private void refreshAmmunition(boolean reloadOfficerChoices) {
+        if (ammoStockTable == null) {
+            return;
+        }
+        List<AmmunitionDao.AmmoStockRecord> rows = ammunitionDao.findAll();
+        ammoStockTable.setItems(FXCollections.observableArrayList(rows));
+
+        Map<Integer, Integer> pendingByAmmoId = new HashMap<>();
+        for (PendingAmmoIssue pending : pendingAmmoIssuesByTempId.values()) {
+            pendingByAmmoId.merge(pending.ammoId(), pending.rounds(), Integer::sum);
+        }
+        List<AmmunitionDao.AmmoStockRecord> available = rows.stream()
+                .filter(r -> "ACTIVE".equalsIgnoreCase(r.status()))
+                .map(r -> {
+                    int reserved = pendingByAmmoId.getOrDefault(r.ammoId(), 0);
+                    int adjusted = r.roundsOnHand() - reserved;
+                    if (adjusted == r.roundsOnHand()) {
+                        return r;
+                    }
+                    return new AmmunitionDao.AmmoStockRecord(
+                            r.ammoId(),
+                            r.typeDefId(),
+                            r.typeName(),
+                            r.caliberName(),
+                            r.useName(),
+                            r.costPerBox(),
+                            r.roundsPerBox(),
+                            Math.max(0, adjusted),
+                            r.unitCost(),
+                            r.storageLocationId(), r.storageLocationName(),
+                            r.notes(),
+                            r.status()
+                    );
+                })
+                .filter(r -> r.roundsOnHand() > 0)
+                .collect(Collectors.toList());
+        ammoIssueAvailableTable.setItems(FXCollections.observableArrayList(available));
+
+        if (reloadOfficerChoices && ammoIssueOfficerCombo != null) {
+            Officer previouslySelected = ammoIssueOfficerCombo.getSelectionModel().getSelectedItem();
+            List<Officer> allOfficers = officerDao.findAll();
+            suppressAmmoOfficerSelectionListener = true;
+            try {
+                ammoIssueOfficerCombo.setItems(FXCollections.observableArrayList(allOfficers));
+                if (previouslySelected != null) {
+                    allOfficers.stream()
+                            .filter(o -> o.getOfficerId() == previouslySelected.getOfficerId())
+                            .findFirst()
+                            .ifPresent(o -> ammoIssueOfficerCombo.getSelectionModel().select(o));
+                }
+            } finally {
+                suppressAmmoOfficerSelectionListener = false;
+            }
+        }
+        if (ammoIssueReasonCombo != null) {
+            ammoIssueReasonCombo.setItems(FXCollections.observableArrayList(lookupDao.findAll(LookupCategory.AMMO_REASONS)));
+        }
+        refreshAmmunitionIssuedToOfficer();
+    }
+
+    private void refreshAmmunitionIssuedToOfficer() {
+        if (ammoIssuedTable == null) {
+            return;
+        }
+        Officer officer = ammoIssueOfficerCombo == null ? null : ammoIssueOfficerCombo.getValue();
+        if (officer == null) {
+            ammoIssuedTable.setItems(FXCollections.observableArrayList());
+            if (ammoIssuedToOfficerLabel != null) {
+                ammoIssuedToOfficerLabel.setText("Select an officer to view issued ammunition.");
+            }
+            return;
+        }
+        boolean showHistory = ammoShowHistoryCheckBox != null && ammoShowHistoryCheckBox.isSelected();
+        List<AmmoIssuanceDao.AmmoIssuanceRow> active = showHistory
+            ? ammoIssuanceDao.findAllByOfficer(officer.getOfficerId())
+            : ammoIssuanceDao.findActiveByOfficer(officer.getOfficerId());
+        List<AmmoIssuanceDao.AmmoIssuanceRow> display = new ArrayList<>(active.size() + pendingAmmoIssuesByTempId.size());
+        for (AmmoIssuanceDao.AmmoIssuanceRow row : active) {
+            if (pendingAmmoReturnIds.contains(row.id())) {
+                display.add(new AmmoIssuanceDao.AmmoIssuanceRow(
+                    row.id(), row.ammoId(), row.typeName(), row.caliberName(),
+                        row.rounds(), row.unitCostAtIssue(), row.reasonId(), row.reasonName(),
+                        row.issuedAt(), row.issuedByUsername(), row.returnedAt(), row.returnedByUsername(),
+                        "PENDING RETURN", row.officerId(), row.officerName(), row.officerBadge()
+                ));
+            } else if (pendingAmmoExpendedIds.contains(row.id())) {
+                display.add(new AmmoIssuanceDao.AmmoIssuanceRow(
+                    row.id(), row.ammoId(), row.typeName(), row.caliberName(),
+                        row.rounds(), row.unitCostAtIssue(), row.reasonId(), row.reasonName(),
+                        row.issuedAt(), row.issuedByUsername(), row.returnedAt(), row.returnedByUsername(),
+                        "PENDING EXPENDED", row.officerId(), row.officerName(), row.officerBadge()
+                ));
+            } else {
+                display.add(row);
+            }
+        }
+        for (PendingAmmoIssue pending : pendingAmmoIssuesByTempId.values()) {
+            display.add(new AmmoIssuanceDao.AmmoIssuanceRow(
+                    pending.tempId(), pending.ammoId(), pending.typeName(),
+                    pending.caliberName(), pending.rounds(), pending.unitCost(), pending.reasonId(),
+                    pending.reasonName(), null, null, null, null,
+                    "PENDING ISSUE", officer.getOfficerId(), officer.getName(), officer.getBadgeNumber()
+            ));
+        }
+        ammoIssuedTable.setItems(FXCollections.observableArrayList(display));
+        if (ammoIssuedToOfficerLabel != null) {
+            int activeRounds = active.stream()
+                    .filter(r -> !pendingAmmoReturnIds.contains(r.id()) && !pendingAmmoExpendedIds.contains(r.id()))
+                    .mapToInt(AmmoIssuanceDao.AmmoIssuanceRow::rounds).sum();
+            int pendingAdd = pendingAmmoIssuesByTempId.values().stream().mapToInt(PendingAmmoIssue::rounds).sum();
+            int pendingRet = pendingAmmoReturnIds.size();
+                int pendingExp = pendingAmmoExpendedIds.size();
+                String pendingTxt = (pendingAdd == 0 && pendingRet == 0 && pendingExp == 0)
+                    ? ""
+                    : String.format("  |  Pending: +%d to issue, %d to return, %d to expend", pendingAdd, pendingRet, pendingExp);
+            ammoIssuedToOfficerLabel.setText(officer.getName() + " (" + officer.getBadgeNumber()
+                    + ") - " + activeRounds + " rounds currently issued" + pendingTxt);
+        }
+    }
+
+    private void clearPendingAmmoChanges() {
+        pendingAmmoIssuesByTempId.clear();
+        pendingAmmoReturnIds.clear();
+            pendingAmmoExpendedIds.clear();
+    }
+
+    private void refreshAmmoTypeDefs() {
+        if (ammoTypesTable == null) return;
+        ammoTypesTable.setItems(FXCollections.observableArrayList(ammoTypeDefinitionDao.findAll()));
+    }
+
+    @FXML
+    public void onAddAmmoTypeDef() {
+        AmmoTypeDefinitionDao.AmmoTypeDefRecord result = showAmmoTypeDefDialog(null);
+        if (result != null) {
+            ammoTypeDefinitionDao.insert(result.caliber(), result.typeName(), result.useType(), result.costPerBox(), result.roundsPerBox());
+            refreshAmmoTypeDefs();
+        }
+    }
+
+    @FXML
+    public void onEditAmmoTypeDef() {
+        AmmoTypeDefinitionDao.AmmoTypeDefRecord selected = ammoTypesTable.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            UiAlerts.error("Ammo Types", "Select a row to edit.");
+            return;
+        }
+        AmmoTypeDefinitionDao.AmmoTypeDefRecord result = showAmmoTypeDefDialog(selected);
+        if (result != null) {
+            ammoTypeDefinitionDao.update(selected.id(), result.caliber(), result.typeName(), result.useType(), result.costPerBox(), result.roundsPerBox());
+            refreshAmmoTypeDefs();
+        }
+    }
+
+    @FXML
+    public void onDeleteAmmoTypeDef() {
+        AmmoTypeDefinitionDao.AmmoTypeDefRecord selected = ammoTypesTable.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            UiAlerts.error("Ammo Types", "Select a row to delete.");
+            return;
+        }
+        ammoTypeDefinitionDao.delete(selected.id());
+        refreshAmmoTypeDefs();
+    }
+
+    private AmmoTypeDefinitionDao.AmmoTypeDefRecord showAmmoTypeDefDialog(AmmoTypeDefinitionDao.AmmoTypeDefRecord existing) {
+        Dialog<AmmoTypeDefinitionDao.AmmoTypeDefRecord> dialog = new Dialog<>();
+        dialog.setTitle(existing == null ? "Add Ammo Type" : "Edit Ammo Type");
+        UiAlerts.applyTheme(dialog);
+
+        ButtonType saveButton = new ButtonType("Save", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(saveButton, ButtonType.CANCEL);
+
+        TextField caliberField = new TextField(existing == null ? "" : existing.caliber());
+        caliberField.setPromptText("e.g. 9mm, .45 ACP, 5.56x45");
+        TextField typeField = new TextField(existing == null ? "" : existing.typeName());
+        typeField.setPromptText("e.g. Speer Gold Dot, Federal HST");
+        ComboBox<String> useCombo = new ComboBox<>(FXCollections.observableArrayList("Duty", "Practice"));
+        useCombo.getSelectionModel().select(existing == null ? "Duty" : existing.useType());
+        TextField costPerBoxField = new TextField(existing == null || existing.costPerBox() == null ? "" : String.format("%.2f", existing.costPerBox()));
+        costPerBoxField.setPromptText("Cost per box (optional)");
+        TextField roundsPerBoxField = new TextField(existing == null || existing.roundsPerBox() == null ? "" : String.valueOf(existing.roundsPerBox()));
+        roundsPerBoxField.setPromptText("Rounds per box (optional)");
+
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(10);
+        int row = 0;
+        grid.add(new Label("Caliber"), 0, row);   grid.add(caliberField, 1, row++);
+        grid.add(new Label("Type"), 0, row);       grid.add(typeField, 1, row++);
+        grid.add(new Label("Use"), 0, row);        grid.add(useCombo, 1, row++);
+        grid.add(new Label("Cost / Box"), 0, row); grid.add(costPerBoxField, 1, row++);
+        grid.add(new Label("Rounds / Box"), 0, row); grid.add(roundsPerBoxField, 1, row++);
+        dialog.getDialogPane().setContent(grid);
+
+        dialog.setResultConverter(bt -> {
+            if (bt != saveButton) return null;
+            String caliber = text(caliberField);
+            String typeName = text(typeField);
+            if (caliber.isEmpty() || typeName.isEmpty()) {
+                UiAlerts.error("Ammo Types", "Caliber and Type are required.");
+                return null;
+            }
+            Double costPerBox = null;
+            if (!text(costPerBoxField).isEmpty()) {
+                try { costPerBox = Double.parseDouble(text(costPerBoxField)); }
+                catch (NumberFormatException ex) { UiAlerts.error("Ammo Types", "Cost per box must be numeric."); return null; }
+            }
+            Integer roundsPerBox = null;
+            if (!text(roundsPerBoxField).isEmpty()) {
+                try { roundsPerBox = Integer.parseInt(text(roundsPerBoxField)); }
+                catch (NumberFormatException ex) { UiAlerts.error("Ammo Types", "Rounds per box must be a whole number."); return null; }
+            }
+            return new AmmoTypeDefinitionDao.AmmoTypeDefRecord(0, caliber, typeName, useCombo.getValue(), costPerBox, roundsPerBox);
+        });
+
+        Optional<AmmoTypeDefinitionDao.AmmoTypeDefRecord> result = dialog.showAndWait();
+        return result.orElse(null);
+    }
+
+    @FXML
+    public void onAddAmmoStock() {
+        AmmoStockFormData formData = showAmmoStockDialog(null);
+        if (formData == null) {
+            return;
+        }
+
+        // Counter behavior: if same ammo profile exists, add rounds to that row
+        // instead of creating another duplicate line item.
+        AmmunitionDao.AmmoStockRecord existing = ammunitionDao.findAll().stream()
+                .filter(r -> Objects.equals(r.typeDefId(), formData.typeDefId()))
+                .filter(r -> Objects.equals(r.status(), formData.status()))
+                .findFirst()
+                .orElse(null);
+
+        if (existing != null) {
+            int newRounds = existing.roundsOnHand() + formData.roundsOnHand();
+            Double unitCost = formData.unitCost() == null ? existing.unitCost() : formData.unitCost();
+            Integer storageId = formData.storageLocationId() == null ? existing.storageLocationId() : formData.storageLocationId();
+            String notes = (formData.notes() == null || formData.notes().isBlank()) ? existing.notes() : formData.notes();
+            ammunitionDao.update(
+                    existing.ammoId(),
+                    existing.typeDefId(),
+                    newRounds,
+                    unitCost,
+                    storageId,
+                    notes,
+                    existing.status()
+            );
+        } else {
+            ammunitionDao.insert(
+                    formData.typeDefId(),
+                    formData.roundsOnHand(),
+                    formData.unitCost(),
+                    formData.storageLocationId(),
+                    formData.notes(),
+                    formData.status()
+            );
+        }
+        refreshAmmunition();
+    }
+
+    @FXML
+    public void onEditAmmoStock() {
+        AmmunitionDao.AmmoStockRecord selected = ammoStockTable.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            UiAlerts.error("Ammunition Stock", "Select a row to edit.");
+            return;
+        }
+        AmmoStockFormData formData = showAmmoStockDialog(selected);
+        if (formData == null) {
+            return;
+        }
+        ammunitionDao.update(
+                selected.ammoId(),
+                formData.typeDefId(),
+                formData.roundsOnHand(),
+                formData.unitCost(),
+                formData.storageLocationId(),
+                formData.notes(),
+                formData.status()
+        );
+        refreshAmmunition();
+    }
+
+    @FXML
+    public void onDeleteAmmoStock() {
+        AmmunitionDao.AmmoStockRecord selected = ammoStockTable.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            UiAlerts.error("Ammunition Stock", "Select a row to delete.");
+            return;
+        }
+        ammunitionDao.delete(selected.ammoId());
+        refreshAmmunition();
+    }
+
+    @FXML
+    public void onAddAmmoIssue() {
+        Officer officer = ammoIssueOfficerCombo.getSelectionModel().getSelectedItem();
+        if (officer == null) {
+            UiAlerts.error("Issue Ammunition", "Select an officer first.");
+            return;
+        }
+        AmmunitionDao.AmmoStockRecord selected = ammoIssueAvailableTable.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            UiAlerts.error("Issue Ammunition", "Select an ammunition stock row.");
+            return;
+        }
+        int rounds;
+        try {
+            rounds = Integer.parseInt(text(ammoIssueRoundsField));
+        } catch (NumberFormatException ex) {
+            UiAlerts.error("Issue Ammunition", "Rounds must be a whole number.");
+            return;
+        }
+        if (rounds <= 0) {
+            UiAlerts.error("Issue Ammunition", "Rounds must be greater than zero.");
+            return;
+        }
+        if (rounds > selected.roundsOnHand()) {
+            UiAlerts.error("Issue Ammunition", "Only " + selected.roundsOnHand() + " rounds available (after pending).");
+            return;
+        }
+        LookupItem reason = ammoIssueReasonCombo.getSelectionModel().getSelectedItem();
+        PendingAmmoIssue pending = new PendingAmmoIssue(
+                nextPendingAmmoIssueTempId--,
+                selected.ammoId(),
+            selected.typeName(),
+                selected.caliberName(),
+                rounds,
+                selected.unitCost(),
+                reason == null ? null : reason.getId(),
+                reason == null ? null : reason.getName()
+        );
+        pendingAmmoIssuesByTempId.put(pending.tempId(), pending);
+        refreshAmmunition();
+    }
+
+    @FXML
+    public void onRemoveAmmoIssue() {
+        if (ammoIssuedTable == null) {
+            return;
+        }
+        AmmoIssuanceDao.AmmoIssuanceRow selected = ammoIssuedTable.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            UiAlerts.error("Remove Ammunition", "Select a row from the issued list.");
+            return;
+        }
+        if (selected.id() < 0) {
+            pendingAmmoIssuesByTempId.remove(selected.id());
+        } else if (pendingAmmoReturnIds.contains(selected.id())) {
+            pendingAmmoReturnIds.remove(selected.id());
+        } else if (pendingAmmoExpendedIds.contains(selected.id())) {
+            pendingAmmoExpendedIds.remove(selected.id());
+        } else {
+            pendingAmmoExpendedIds.remove(selected.id());
+            pendingAmmoReturnIds.add(selected.id());
+        }
+        refreshAmmunition();
+    }
+
+    @FXML
+    public void onMarkAmmoExpended() {
+        if (ammoIssuedTable == null) {
+            return;
+        }
+        AmmoIssuanceDao.AmmoIssuanceRow selected = ammoIssuedTable.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            UiAlerts.error("Mark Expended", "Select a row from the issued list.");
+            return;
+        }
+        if (selected.id() < 0) {
+            UiAlerts.error("Mark Expended", "Save pending issues before marking expended.");
+            return;
+        }
+        if (pendingAmmoExpendedIds.contains(selected.id())) {
+            pendingAmmoExpendedIds.remove(selected.id());
+        } else {
+            pendingAmmoReturnIds.remove(selected.id());
+            pendingAmmoExpendedIds.add(selected.id());
+        }
+        refreshAmmunition();
+    }
+
+    @FXML
+    public void onSaveAmmoIssue() {
+        Officer officer = ammoIssueOfficerCombo.getSelectionModel().getSelectedItem();
+        if (officer == null) {
+            UiAlerts.error("Save Ammunition", "Select an officer first.");
+            return;
+        }
+        if (pendingAmmoIssuesByTempId.isEmpty() && pendingAmmoReturnIds.isEmpty()) {
+            UiAlerts.error("Save Ammunition", "Nothing staged to save. Use Add to Issue or Remove Selected first.");
+            return;
+        }
+
+        Integer userId = currentUserIdOrNull();
+        List<Integer> newIssuanceIds = new ArrayList<>();
+        for (PendingAmmoIssue pending : pendingAmmoIssuesByTempId.values()) {
+            int newId = ammoIssuanceDao.issue(
+                    pending.ammoId(),
+                    officer.getOfficerId(),
+                    pending.rounds(),
+                    pending.reasonId(),
+                    pending.unitCost(),
+                    userId
+            );
+            if (newId < 0) {
+                UiAlerts.error("Save Ammunition",
+                    "Insufficient stock for " + safe(pending.typeName()) + " " + safe(pending.caliberName())
+                                + ". Some changes were not saved.");
+                break;
+            }
+            newIssuanceIds.add(newId);
+        }
+        for (Integer issuanceId : new ArrayList<>(pendingAmmoReturnIds)) {
+            ammoIssuanceDao.returnIssuance(issuanceId, userId);
+        }
+        for (Integer issuanceId : new ArrayList<>(pendingAmmoExpendedIds)) {
+            ammoIssuanceDao.markExpended(issuanceId, userId);
+        }
+
+        clearPendingAmmoChanges();
+        refreshAmmunition();
+
+        List<AmmoIssuanceDao.AmmoIssuanceRow> newlyIssued = ammoIssuanceDao.findByIds(newIssuanceIds);
+        showAmmoSignOffSheet(officer, newlyIssued);
+    }
+
+    @FXML
+    public void onPrintAmmoSignOff() {
+        Officer officer = ammoIssueOfficerCombo.getSelectionModel().getSelectedItem();
+        if (officer == null) {
+            UiAlerts.error("Print Sign-Off", "Select an officer first.");
+            return;
+        }
+        showAmmoSignOffSheet(officer, List.of());
+    }
+
+    private void showAmmoSignOffSheet(Officer officer,
+                                      List<AmmoIssuanceDao.AmmoIssuanceRow> issuedThisAction) {
+        List<AmmoIssuanceDao.AmmoIssuanceRow> currentIssued = ammoIssuanceDao.findActiveByOfficer(officer.getOfficerId());
+        if (currentIssued.isEmpty() && (issuedThisAction == null || issuedThisAction.isEmpty())) {
+            UiAlerts.info("Print Sign-Off", "Officer has no currently issued ammunition.");
+            return;
+        }
+        String adminName = SessionManager.getCurrentUser() == null
+                ? ""
+                : SessionManager.getCurrentUser().getUsername();
+        boolean opened = WindowsPrintPreview.openHtml(
+                "quartermaster-ammo-signoff-",
+                PrintHtmlFactory.buildAmmoIssuancePrintHtml(
+                        getAgencyName(), adminName, officer, currentIssued, issuedThisAction)
+        );
+        if (!opened) {
+            UiAlerts.info("Print Sign-Off",
+                    "Unable to open the print preview window. Please check Windows print settings.");
+        }
+    }
+
+    private AmmoStockFormData showAmmoStockDialog(AmmunitionDao.AmmoStockRecord existing) {
+        Dialog<AmmoStockFormData> dialog = new Dialog<>();
+        dialog.setTitle(existing == null ? "Add Ammunition Stock" : "Edit Ammunition Stock");
+        UiAlerts.applyTheme(dialog);
+
+        ButtonType saveButton = new ButtonType("Save", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(saveButton, ButtonType.CANCEL);
+
+        List<AmmoTypeDefinitionDao.AmmoTypeDefRecord> allTypeDefs = ammoTypeDefinitionDao.findAll();
+        ComboBox<AmmoTypeDefinitionDao.AmmoTypeDefRecord> typeDefCombo = new ComboBox<>(FXCollections.observableArrayList(allTypeDefs));
+        typeDefCombo.setConverter(new StringConverter<>() {
+            @Override public String toString(AmmoTypeDefinitionDao.AmmoTypeDefRecord r) { return r == null ? "" : r.displayLabel(); }
+            @Override public AmmoTypeDefinitionDao.AmmoTypeDefRecord fromString(String s) { return null; }
+        });
+        typeDefCombo.setPrefWidth(280);
+
+        ComboBox<LookupItem> storageCombo = new ComboBox<>(FXCollections.observableArrayList(lookupDao.findAll(LookupCategory.STORAGE_LOCATIONS)));
+        storageCombo.setEditable(true);
+        enableLookupTypeAhead(storageCombo);
+
+        if (existing != null) {
+            allTypeDefs.stream().filter(r -> Objects.equals(r.id(), existing.typeDefId())).findFirst()
+                    .ifPresent(typeDefCombo::setValue);
+            selectLookupById(storageCombo, existing.storageLocationId());
+        }
+
+        TextField roundsField = new TextField(existing == null ? "0" : String.valueOf(existing.roundsOnHand()));
+        TextField unitCostField = new TextField(existing == null || existing.unitCost() == null ? "" : String.format("%.2f", existing.unitCost()));
+        TextField notesField = new TextField(existing == null || existing.notes() == null ? "" : existing.notes());
+        ComboBox<String> statusCombo = new ComboBox<>(FXCollections.observableArrayList("ACTIVE", "ARCHIVED"));
+        statusCombo.getSelectionModel().select(existing == null || existing.status() == null ? "ACTIVE" : existing.status());
+
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(10);
+        int row = 0;
+        grid.add(new Label("Ammo Type"), 0, row);
+        grid.add(typeDefCombo, 1, row++);
+        grid.add(new Label("Rounds On Hand"), 0, row);
+        grid.add(roundsField, 1, row++);
+        grid.add(new Label("Unit Cost"), 0, row);
+        grid.add(unitCostField, 1, row++);
+        grid.add(new Label("Storage Location"), 0, row);
+        grid.add(storageCombo, 1, row++);
+        grid.add(new Label("Notes"), 0, row);
+        grid.add(notesField, 1, row++);
+        grid.add(new Label("Status"), 0, row);
+        grid.add(statusCombo, 1, row++);
+
+        dialog.getDialogPane().setContent(grid);
+        dialog.setResultConverter(buttonType -> {
+            if (buttonType != saveButton) {
+                return null;
+            }
+
+            AmmoTypeDefinitionDao.AmmoTypeDefRecord selectedTypeDef = typeDefCombo.getValue();
+            if (selectedTypeDef == null) {
+                UiAlerts.error("Ammunition Stock", "Select an ammo type. Add types first in the Ammo Types tab.");
+                return null;
+            }
+
+            int rounds;
+            try {
+                rounds = Integer.parseInt(text(roundsField));
+            } catch (NumberFormatException ex) {
+                UiAlerts.error("Ammunition Stock", "Rounds must be a whole number.");
+                return null;
+            }
+            if (rounds < 0) {
+                UiAlerts.error("Ammunition Stock", "Rounds cannot be negative.");
+                return null;
+            }
+
+            Double unitCost = null;
+            String unitCostText = text(unitCostField);
+            if (!unitCostText.isEmpty()) {
+                try {
+                    unitCost = Double.parseDouble(unitCostText);
+                } catch (NumberFormatException ex) {
+                    UiAlerts.error("Ammunition Stock", "Unit cost must be numeric.");
+                    return null;
+                }
+                if (unitCost < 0) {
+                    UiAlerts.error("Ammunition Stock", "Unit cost cannot be negative.");
+                    return null;
+                }
+            }
+
+            return new AmmoStockFormData(
+                    selectedTypeDef.id(),
+                    rounds,
+                    unitCost,
+                    selectedId(storageCombo),
+                    text(notesField),
+                    statusCombo.getValue()
+            );
+        });
+
+        Optional<AmmoStockFormData> result = dialog.showAndWait();
+        if (result.isEmpty()) {
+            return null;
+        }
+        return result.get();
     }
 
     private void refreshLookupItems(LookupCategory category) {
@@ -3400,6 +4164,14 @@ public class AdminController {
                                         Integer storageLocationId,
                                         EquipmentCondition condition,
                                         EquipmentStatus status) {
+    }
+
+    private record AmmoStockFormData(Integer typeDefId,
+                                     int roundsOnHand,
+                                     Double unitCost,
+                                     Integer storageLocationId,
+                                     String notes,
+                                     String status) {
     }
 
 }
