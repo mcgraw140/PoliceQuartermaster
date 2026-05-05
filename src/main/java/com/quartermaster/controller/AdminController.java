@@ -3,11 +3,15 @@ package com.quartermaster.controller;
 import com.quartermaster.Main;
 import com.quartermaster.auth.SessionManager;
 import com.quartermaster.auth.UserRole;
+import com.quartermaster.dao.AmmoIssuanceDao;
+import com.quartermaster.dao.AmmunitionDao;
 import com.quartermaster.dao.EquipmentDao;
+import com.quartermaster.dao.EquipmentDao.UniformCategory;
 import com.quartermaster.dao.IssuanceDao;
 import com.quartermaster.dao.LookupDao;
 import com.quartermaster.dao.OfficerDao;
 import com.quartermaster.dao.SettingsDao;
+import com.quartermaster.dao.UniformIssuanceDao;
 import com.quartermaster.dao.UserDao;
 import com.quartermaster.dao.VehicleDao;
 import com.quartermaster.dao.VehicleMaintenanceLogDao;
@@ -69,9 +73,21 @@ public class AdminController {
 
     private enum MainTab {
         EQUIPMENT,
+        UNIFORM,
+        AMMUNITION,
         ISSUE_RETURN,
         ADMIN,
         VEHICLE
+    }
+
+    private enum UniformSubTab {
+        STOCK,
+        ISSUE
+    }
+
+    private enum AmmoSubTab {
+        STOCK,
+        ISSUE
     }
 
     private enum AdminSubTab {
@@ -86,6 +102,12 @@ public class AdminController {
 
     @FXML
     private Button topTabEquipment;
+
+    @FXML
+    private Button topTabUniform;
+
+    @FXML
+    private Button topTabAmmunition;
 
     @FXML
     private Button topTabIssueReturn;
@@ -113,6 +135,82 @@ public class AdminController {
 
     @FXML
     private VBox moduleAdminPane;
+
+    @FXML
+    private VBox moduleUniformPane;
+
+    @FXML
+    private Label uniformModuleTitleLabel;
+
+    @FXML
+    private VBox uniformStockPane;
+
+    @FXML
+    private VBox uniformIssuePane;
+
+    @FXML
+    private TableView<EquipmentDao.UniformStockRecord> uniformStockTable;
+
+    @FXML
+    private TableColumn<EquipmentDao.UniformStockRecord, String> uniformItemColumn;
+    @FXML
+    private TableColumn<EquipmentDao.UniformStockRecord, String> uniformCategoryColumn;
+    @FXML
+    private TableColumn<EquipmentDao.UniformStockRecord, String> uniformBrandColumn;
+    @FXML
+    private TableColumn<EquipmentDao.UniformStockRecord, String> uniformModelColumn;
+    @FXML
+    private TableColumn<EquipmentDao.UniformStockRecord, String> uniformSizeColumn;
+    @FXML
+    private TableColumn<EquipmentDao.UniformStockRecord, String> uniformQtyColumn;
+    @FXML
+    private TableColumn<EquipmentDao.UniformStockRecord, String> uniformUnitCostColumn;
+    @FXML
+    private TableColumn<EquipmentDao.UniformStockRecord, String> uniformSupplierColumn;
+    @FXML
+    private TableColumn<EquipmentDao.UniformStockRecord, String> uniformStorageColumn;
+    @FXML
+    private TableColumn<EquipmentDao.UniformStockRecord, String> uniformConditionColumn;
+    @FXML
+    private TableColumn<EquipmentDao.UniformStockRecord, String> uniformStatusColumn;
+
+    @FXML
+    private ComboBox<Officer> uniformIssueOfficerCombo;
+    @FXML
+    private TextField uniformIssueQtyField;
+    @FXML
+    private TableView<EquipmentDao.UniformStockRecord> uniformIssueAvailableTable;
+    @FXML
+    private TableColumn<EquipmentDao.UniformStockRecord, String> uniformIssueItemColumn;
+    @FXML
+    private TableColumn<EquipmentDao.UniformStockRecord, String> uniformIssueCategoryColumn;
+    @FXML
+    private TableColumn<EquipmentDao.UniformStockRecord, String> uniformIssueBrandColumn;
+    @FXML
+    private TableColumn<EquipmentDao.UniformStockRecord, String> uniformIssueModelColumn;
+    @FXML
+    private TableColumn<EquipmentDao.UniformStockRecord, String> uniformIssueSizeColumn;
+    @FXML
+    private TableColumn<EquipmentDao.UniformStockRecord, String> uniformIssueQtyColumn;
+    @FXML
+    private TableColumn<EquipmentDao.UniformStockRecord, String> uniformIssueStorageColumn;
+
+    @FXML
+    private Label uniformIssuedToOfficerLabel;
+    @FXML
+    private TableView<UniformIssuanceDao.UniformIssuanceRow> uniformIssuedTable;
+    @FXML
+    private TableColumn<UniformIssuanceDao.UniformIssuanceRow, String> uniformIssuedItemColumn;
+    @FXML
+    private TableColumn<UniformIssuanceDao.UniformIssuanceRow, String> uniformIssuedSizeColumn;
+    @FXML
+    private TableColumn<UniformIssuanceDao.UniformIssuanceRow, String> uniformIssuedQtyColumn;
+    @FXML
+    private TableColumn<UniformIssuanceDao.UniformIssuanceRow, String> uniformIssuedCostColumn;
+    @FXML
+    private TableColumn<UniformIssuanceDao.UniformIssuanceRow, String> uniformIssuedDateColumn;
+    @FXML
+    private TableColumn<UniformIssuanceDao.UniformIssuanceRow, String> uniformIssuedByColumn;
 
     @FXML
     private Label inventoryModuleTitleLabel;
@@ -416,6 +514,21 @@ public class AdminController {
 
     private final EquipmentDao equipmentDao = new EquipmentDao();
     private final IssuanceDao issuanceDao = new IssuanceDao();
+    private final UniformIssuanceDao uniformIssuanceDao = new UniformIssuanceDao();
+    private final java.util.Map<Integer, PendingUniformIssue> pendingUniformIssuesByTempId = new java.util.LinkedHashMap<>();
+    private final java.util.Set<Integer> pendingUniformReturnIds = new java.util.LinkedHashSet<>();
+    private int nextPendingUniformIssueTempId = -1;
+
+    private record PendingUniformIssue(int tempId,
+                                       int uniformId,
+                                       String itemName,
+                                       String category,
+                                       String brand,
+                                       String model,
+                                       String sizeName,
+                                       int quantity,
+                                       Double unitCost) {
+    }
     private final OfficerDao officerDao = new OfficerDao();
     private final UserDao userDao = new UserDao();
     private final VehicleDao vehicleDao = new VehicleDao();
@@ -444,6 +557,7 @@ public class AdminController {
         setupTables();
         setupFilters();
         setupAddEquipmentPage();
+        setupUniformTabs();
         setupLookupAdmin();
         loadAgencySettings();
         issueDatePicker.setValue(LocalDate.now());
@@ -456,6 +570,7 @@ public class AdminController {
     public void onTopTabEquipment() {
         activeMainTab = MainTab.EQUIPMENT;
         UiNavSupport.setPaneVisible(moduleInventoryPane, true);
+        UiNavSupport.setPaneVisible(moduleUniformPane, false);
         UiNavSupport.setPaneVisible(moduleIssuePane, false);
         UiNavSupport.setPaneVisible(moduleFleetPane, false);
         UiNavSupport.setPaneVisible(moduleAdminPane, false);
@@ -465,9 +580,23 @@ public class AdminController {
     }
 
     @FXML
+    public void onTopTabUniform() {
+        activeMainTab = MainTab.UNIFORM;
+        UiNavSupport.setPaneVisible(moduleInventoryPane, false);
+        UiNavSupport.setPaneVisible(moduleUniformPane, true);
+        UiNavSupport.setPaneVisible(moduleIssuePane, false);
+        UiNavSupport.setPaneVisible(moduleFleetPane, false);
+        UiNavSupport.setPaneVisible(moduleAdminPane, false);
+        applyTopTabStyles();
+        showUniformSubNav(UniformSubTab.STOCK);
+        refreshUniforms();
+    }
+
+    @FXML
     public void onTopTabIssueReturn() {
         activeMainTab = MainTab.ISSUE_RETURN;
         UiNavSupport.setPaneVisible(moduleInventoryPane, false);
+        UiNavSupport.setPaneVisible(moduleUniformPane, false);
         UiNavSupport.setPaneVisible(moduleIssuePane, true);
         UiNavSupport.setPaneVisible(moduleFleetPane, false);
         UiNavSupport.setPaneVisible(moduleAdminPane, false);
@@ -480,6 +609,7 @@ public class AdminController {
     public void onTopTabAdmin() {
         activeMainTab = MainTab.ADMIN;
         UiNavSupport.setPaneVisible(moduleInventoryPane, false);
+        UiNavSupport.setPaneVisible(moduleUniformPane, false);
         UiNavSupport.setPaneVisible(moduleIssuePane, false);
         UiNavSupport.setPaneVisible(moduleFleetPane, false);
         UiNavSupport.setPaneVisible(moduleAdminPane, true);
@@ -491,6 +621,7 @@ public class AdminController {
     public void onTopTabVehicle() {
         activeMainTab = MainTab.VEHICLE;
         UiNavSupport.setPaneVisible(moduleInventoryPane, false);
+        UiNavSupport.setPaneVisible(moduleUniformPane, false);
         UiNavSupport.setPaneVisible(moduleIssuePane, false);
         UiNavSupport.setPaneVisible(moduleFleetPane, true);
         UiNavSupport.setPaneVisible(moduleAdminPane, false);
@@ -553,13 +684,20 @@ public class AdminController {
 
         int created = 0;
         if (formData.branch() == EquipmentBranch.UNIFORM) {
-            int quantity = formData.quantity() == null ? 1 : formData.quantity();
-            String serialPrefix = formData.serialPrefix();
-            for (int i = 1; i <= quantity; i++) {
-                String generatedSerial = buildUniformSerial(serialPrefix, i);
-                equipmentDao.insert(formData.toItem(0, generatedSerial));
-                created++;
-            }
+            equipmentDao.insertUniformStock(
+                    resolveUniformItemName(formData),
+                    UniformCategory.UNIFORM,
+                    text(addEqMakeField),
+                    text(addEqModelField),
+                    formData.sizeId(),
+                    formData.quantity() == null ? 1 : formData.quantity(),
+                    formData.replacementCost(),
+                    null,
+                    formData.storageLocationId(),
+                    formData.condition(),
+                    formData.status()
+            );
+            created = 1;
         } else {
             List<String> serials = formData.serialNumbers();
             if (serials.isEmpty()) {
@@ -588,6 +726,36 @@ public class AdminController {
             return;
         }
 
+        if (selected.getBranch() == EquipmentBranch.UNIFORM) {
+            EquipmentDao.UniformStockRecord existing = equipmentDao.findUniformStockById(selected.getItemId());
+            if (existing == null) {
+                UiAlerts.error("Equipment", "Uniform stock row no longer exists.");
+                return;
+            }
+
+            UniformStockFormData uniformFormData = showUniformStockDialog(existing);
+            if (uniformFormData == null) {
+                return;
+            }
+
+            equipmentDao.updateUniformStock(
+                    existing.uniformId(),
+                    uniformFormData.itemName(),
+                    uniformFormData.category(),
+                    uniformFormData.brand(),
+                    uniformFormData.model(),
+                    uniformFormData.sizeId(),
+                    uniformFormData.quantityOnHand(),
+                    uniformFormData.unitCost(),
+                    uniformFormData.supplier(),
+                    uniformFormData.storageLocationId(),
+                    uniformFormData.condition(),
+                    uniformFormData.status()
+            );
+            refreshEquipmentAndIssueOptions();
+            return;
+        }
+
         EquipmentFormData formData = showEquipmentDialog(selected);
         if (formData == null) {
             return;
@@ -602,6 +770,13 @@ public class AdminController {
         EquipmentItem selected = equipmentTable.getSelectionModel().getSelectedItem();
         if (selected == null) {
             UiAlerts.error("Equipment", "Select an equipment item to delete.");
+            return;
+        }
+
+        if (selected.getBranch() == EquipmentBranch.UNIFORM) {
+            equipmentDao.deleteUniformStock(selected.getItemId());
+            refreshEquipmentAndIssueOptions();
+            UiAlerts.info("Equipment", "Uniform stock row deleted.");
             return;
         }
 
@@ -1797,8 +1972,14 @@ public class AdminController {
             .filter(item -> InventoryViewSupport.matchesInventoryFilter(item, showHistorical, selectedStatus, query))
                 .collect(Collectors.toList());
 
-        equipmentTable.setItems(FXCollections.observableArrayList(filtered));
-        inventorySummaryLabel.setText(InventoryViewSupport.buildInventorySummaryText(filtered, byBranch.size(), activeEquipmentBranch));
+        List<EquipmentItem> displayRows = InventoryViewSupport.buildInventoryDisplayRows(
+                filtered,
+                activeEquipmentBranch,
+                selectedStatus
+        );
+
+        equipmentTable.setItems(FXCollections.observableArrayList(displayRows));
+        inventorySummaryLabel.setText(InventoryViewSupport.buildInventorySummaryText(displayRows, byBranch.size(), activeEquipmentBranch));
 
         boolean weaponView = activeEquipmentBranch == EquipmentBranch.WEAPON;
         attachItemButton.setVisible(weaponView);
@@ -1887,10 +2068,12 @@ public class AdminController {
 
         Button weaponsButton = UiNavSupport.createSubNavButton("Weapons", () -> setEquipmentBranch(EquipmentBranch.WEAPON));
         Button dutyButton = UiNavSupport.createSubNavButton("Duty", () -> setEquipmentBranch(EquipmentBranch.EQUIPMENT));
-        Button uniformsButton = UiNavSupport.createSubNavButton("Uniforms", () -> setEquipmentBranch(EquipmentBranch.UNIFORM));
         Button addButton = UiNavSupport.createSubNavButton("Add Equipment", this::onAddEquipment);
 
-        moduleNavBar.getChildren().setAll(moduleNavLabel, weaponsButton, dutyButton, uniformsButton, addButton);
+        moduleNavBar.getChildren().setAll(moduleNavLabel, weaponsButton, dutyButton, addButton);
+        if (activeEquipmentBranch == EquipmentBranch.UNIFORM) {
+            activeEquipmentBranch = EquipmentBranch.WEAPON;
+        }
         setEquipmentBranch(activeEquipmentBranch);
     }
 
@@ -1965,11 +2148,12 @@ public class AdminController {
     }
 
     private void applyTopTabStyles() {
-        List<Button> buttons = List.of(topTabEquipment, topTabIssueReturn, topTabAdmin, topTabVehicle);
+        List<Button> buttons = List.of(topTabEquipment, topTabUniform, topTabIssueReturn, topTabAdmin, topTabVehicle);
         UiNavSupport.clearActive(buttons);
 
         switch (activeMainTab) {
             case EQUIPMENT -> topTabEquipment.getStyleClass().add("active");
+            case UNIFORM -> topTabUniform.getStyleClass().add("active");
             case ISSUE_RETURN -> topTabIssueReturn.getStyleClass().add("active");
             case ADMIN -> topTabAdmin.getStyleClass().add("active");
             case VEHICLE -> topTabVehicle.getStyleClass().add("active");
@@ -1980,6 +2164,392 @@ public class AdminController {
         lookupEditorTitle.setText(category.getDisplayName());
         lookupItemList.setItems(FXCollections.observableArrayList(lookupDao.findAll(category)));
     }
+
+    // ===== Uniform tab =====
+
+    private void setupUniformTabs() {
+        if (uniformStockTable == null) {
+            return;
+        }
+        uniformItemColumn.setCellValueFactory(c -> Bindings.createStringBinding(() -> safe(c.getValue().itemName())));
+        uniformCategoryColumn.setCellValueFactory(c -> Bindings.createStringBinding(() -> c.getValue().category() == null ? "" : c.getValue().category().name()));
+        uniformBrandColumn.setCellValueFactory(c -> Bindings.createStringBinding(() -> safe(c.getValue().brand())));
+        uniformModelColumn.setCellValueFactory(c -> Bindings.createStringBinding(() -> safe(c.getValue().model())));
+        uniformSizeColumn.setCellValueFactory(c -> Bindings.createStringBinding(() -> safe(c.getValue().sizeName())));
+        uniformQtyColumn.setCellValueFactory(c -> Bindings.createStringBinding(() -> String.valueOf(c.getValue().quantityOnHand())));
+        uniformUnitCostColumn.setCellValueFactory(c -> Bindings.createStringBinding(() -> c.getValue().unitCost() == null ? "" : String.format("$%.2f", c.getValue().unitCost())));
+        uniformSupplierColumn.setCellValueFactory(c -> Bindings.createStringBinding(() -> safe(c.getValue().supplier())));
+        uniformStorageColumn.setCellValueFactory(c -> Bindings.createStringBinding(() -> safe(c.getValue().storageLocationName())));
+        uniformConditionColumn.setCellValueFactory(c -> Bindings.createStringBinding(() -> c.getValue().condition() == null ? "" : c.getValue().condition().name()));
+        uniformStatusColumn.setCellValueFactory(c -> Bindings.createStringBinding(() -> c.getValue().status() == null ? "" : c.getValue().status().name()));
+
+        uniformIssueItemColumn.setCellValueFactory(c -> Bindings.createStringBinding(() -> safe(c.getValue().itemName())));
+        uniformIssueCategoryColumn.setCellValueFactory(c -> Bindings.createStringBinding(() -> c.getValue().category() == null ? "" : c.getValue().category().name()));
+        uniformIssueBrandColumn.setCellValueFactory(c -> Bindings.createStringBinding(() -> safe(c.getValue().brand())));
+        uniformIssueModelColumn.setCellValueFactory(c -> Bindings.createStringBinding(() -> safe(c.getValue().model())));
+        uniformIssueSizeColumn.setCellValueFactory(c -> Bindings.createStringBinding(() -> safe(c.getValue().sizeName())));
+        uniformIssueQtyColumn.setCellValueFactory(c -> Bindings.createStringBinding(() -> String.valueOf(c.getValue().quantityOnHand())));
+        uniformIssueStorageColumn.setCellValueFactory(c -> Bindings.createStringBinding(() -> safe(c.getValue().storageLocationName())));
+
+        uniformIssueOfficerCombo.setCellFactory(listView -> new javafx.scene.control.ListCell<>() {
+            @Override
+            protected void updateItem(Officer item, boolean empty) {
+                super.updateItem(item, empty);
+                setText(empty || item == null ? null : item.getName() + " (" + item.getBadgeNumber() + ")");
+            }
+        });
+        uniformIssueOfficerCombo.setButtonCell(uniformIssueOfficerCombo.getCellFactory().call(null));
+        uniformIssueOfficerCombo.valueProperty().addListener((obs, oldVal, newVal) -> {
+            clearPendingUniformChanges();
+            refreshUniformIssuedToOfficer();
+            refreshUniforms();
+        });
+
+        if (uniformIssuedTable != null) {
+            uniformIssuedItemColumn.setCellValueFactory(c -> Bindings.createStringBinding(() -> safe(c.getValue().itemName())));
+            uniformIssuedSizeColumn.setCellValueFactory(c -> Bindings.createStringBinding(() -> safe(c.getValue().sizeName())));
+            uniformIssuedQtyColumn.setCellValueFactory(c -> Bindings.createStringBinding(() -> String.valueOf(c.getValue().quantity())));
+            uniformIssuedCostColumn.setCellValueFactory(c -> Bindings.createStringBinding(() ->
+                    c.getValue().unitCostAtIssue() == null ? "" : String.format("$%.2f", c.getValue().unitCostAtIssue())));
+            uniformIssuedDateColumn.setCellValueFactory(c -> Bindings.createStringBinding(() ->
+                    c.getValue().issuedAt() == null ? "" :
+                            c.getValue().issuedAt().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))));
+            uniformIssuedByColumn.setCellValueFactory(c -> Bindings.createStringBinding(() -> safe(c.getValue().status())));
+        }
+    }
+
+    private static String safe(String value) {
+        return value == null ? "" : value;
+    }
+
+    private void showUniformSubNav(UniformSubTab subTab) {
+        moduleNavLabel.setText("Uniforms");
+        Button stockButton = UiNavSupport.createSubNavButton("Uniform Stock", () -> switchUniformSubTab(UniformSubTab.STOCK));
+        Button issueButton = UiNavSupport.createSubNavButton("Issue", () -> switchUniformSubTab(UniformSubTab.ISSUE));
+        moduleNavBar.getChildren().setAll(moduleNavLabel, stockButton, issueButton);
+        switchUniformSubTab(subTab);
+    }
+
+    private void switchUniformSubTab(UniformSubTab subTab) {
+        List<Button> buttons = UiNavSupport.getSubNavButtons(moduleNavBar);
+        UiNavSupport.clearActive(buttons);
+        switch (subTab) {
+            case STOCK -> {
+                uniformModuleTitleLabel.setText("Uniform Stock");
+                UiNavSupport.setPaneVisible(uniformStockPane, true);
+                UiNavSupport.setPaneVisible(uniformIssuePane, false);
+                UiNavSupport.activateButtonByIndex(buttons, 0);
+            }
+            case ISSUE -> {
+                uniformModuleTitleLabel.setText("Issue Uniform");
+                UiNavSupport.setPaneVisible(uniformStockPane, false);
+                UiNavSupport.setPaneVisible(uniformIssuePane, true);
+                UiNavSupport.activateButtonByIndex(buttons, 1);
+            }
+        }
+        refreshUniforms();
+    }
+
+    private void refreshUniforms() {
+        if (uniformStockTable == null) {
+            return;
+        }
+        List<EquipmentDao.UniformStockRecord> rows = equipmentDao.findAllUniformStockRecords();
+        uniformStockTable.setItems(FXCollections.observableArrayList(rows));
+
+        // Subtract any pending (unsaved) issued quantities from displayed availability so users
+        // can't over-allocate stock from the staging area.
+        Map<Integer, Integer> pendingByUniformId = new HashMap<>();
+        for (PendingUniformIssue pending : pendingUniformIssuesByTempId.values()) {
+            pendingByUniformId.merge(pending.uniformId(), pending.quantity(), Integer::sum);
+        }
+        List<EquipmentDao.UniformStockRecord> available = rows.stream()
+                .filter(r -> r.status() == EquipmentStatus.AVAILABLE)
+                .map(r -> {
+                    int reserved = pendingByUniformId.getOrDefault(r.uniformId(), 0);
+                    int adjusted = r.quantityOnHand() - reserved;
+                    if (adjusted == r.quantityOnHand()) {
+                        return r;
+                    }
+                    return new EquipmentDao.UniformStockRecord(
+                            r.uniformId(), r.itemName(), r.category(), r.brand(), r.model(),
+                            r.sizeId(), r.sizeName(), Math.max(0, adjusted), r.unitCost(),
+                            r.supplier(), r.storageLocationId(), r.storageLocationName(),
+                            r.condition(), r.status()
+                    );
+                })
+                .filter(r -> r.quantityOnHand() > 0)
+                .collect(Collectors.toList());
+        uniformIssueAvailableTable.setItems(FXCollections.observableArrayList(available));
+
+        Officer previouslySelected = uniformIssueOfficerCombo.getSelectionModel().getSelectedItem();
+        List<Officer> allOfficers = officerDao.findAll();
+        uniformIssueOfficerCombo.setItems(FXCollections.observableArrayList(allOfficers));
+        if (previouslySelected != null) {
+            allOfficers.stream()
+                    .filter(o -> o.getOfficerId() == previouslySelected.getOfficerId())
+                    .findFirst()
+                    .ifPresent(o -> uniformIssueOfficerCombo.getSelectionModel().select(o));
+        }
+        refreshUniformIssuedToOfficer();
+    }
+
+    private void refreshUniformIssuedToOfficer() {
+        if (uniformIssuedTable == null) {
+            return;
+        }
+        Officer officer = uniformIssueOfficerCombo.getSelectionModel().getSelectedItem();
+        if (officer == null) {
+            uniformIssuedTable.setItems(FXCollections.observableArrayList());
+            if (uniformIssuedToOfficerLabel != null) {
+                uniformIssuedToOfficerLabel.setText("Select an officer to view issued uniforms.");
+            }
+            return;
+        }
+        List<UniformIssuanceDao.UniformIssuanceRow> active = uniformIssuanceDao.findActiveByOfficer(officer.getOfficerId());
+        List<UniformIssuanceDao.UniformIssuanceRow> display = new ArrayList<>(active.size() + pendingUniformIssuesByTempId.size());
+        // Existing active rows; mark those staged for return.
+        for (UniformIssuanceDao.UniformIssuanceRow row : active) {
+            if (pendingUniformReturnIds.contains(row.id())) {
+                display.add(new UniformIssuanceDao.UniformIssuanceRow(
+                        row.id(), row.uniformId(), row.itemName(), row.category(), row.brand(),
+                        row.model(), row.sizeName(), row.quantity(), row.unitCostAtIssue(),
+                        row.issuedAt(), row.issuedByUsername(), row.returnedAt(), row.returnedByUsername(),
+                        "PENDING RETURN", row.officerId(), row.officerName(), row.officerBadge()
+                ));
+            } else {
+                display.add(row);
+            }
+        }
+        // Pending new issues as synthetic rows (negative id).
+        for (PendingUniformIssue pending : pendingUniformIssuesByTempId.values()) {
+            display.add(new UniformIssuanceDao.UniformIssuanceRow(
+                    pending.tempId(), pending.uniformId(), pending.itemName(), pending.category(),
+                    pending.brand(), pending.model(), pending.sizeName(), pending.quantity(),
+                    pending.unitCost(), null, null, null, null,
+                    "PENDING ISSUE", officer.getOfficerId(), officer.getName(), officer.getBadgeNumber()
+            ));
+        }
+        uniformIssuedTable.setItems(FXCollections.observableArrayList(display));
+        if (uniformIssuedToOfficerLabel != null) {
+            int activeQty = active.stream()
+                    .filter(r -> !pendingUniformReturnIds.contains(r.id()))
+                    .mapToInt(UniformIssuanceDao.UniformIssuanceRow::quantity).sum();
+            int pendingAdd = pendingUniformIssuesByTempId.values().stream()
+                    .mapToInt(PendingUniformIssue::quantity).sum();
+            int pendingRet = pendingUniformReturnIds.size();
+            String pendingTxt = (pendingAdd == 0 && pendingRet == 0)
+                    ? ""
+                    : String.format("  |  Pending: +%d to issue, %d to return", pendingAdd, pendingRet);
+            uniformIssuedToOfficerLabel.setText(officer.getName() + " (" + officer.getBadgeNumber()
+                    + ") - " + activeQty + " currently issued" + pendingTxt);
+        }
+    }
+
+    private void clearPendingUniformChanges() {
+        pendingUniformIssuesByTempId.clear();
+        pendingUniformReturnIds.clear();
+    }
+
+    @FXML
+    public void onAddUniformIssue() {
+        Officer officer = uniformIssueOfficerCombo.getSelectionModel().getSelectedItem();
+        if (officer == null) {
+            UiAlerts.error("Issue Uniform", "Select an officer first.");
+            return;
+        }
+        EquipmentDao.UniformStockRecord selected = uniformIssueAvailableTable.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            UiAlerts.error("Issue Uniform", "Select a uniform stock row.");
+            return;
+        }
+        int qty;
+        try {
+            qty = Integer.parseInt(text(uniformIssueQtyField));
+        } catch (NumberFormatException ex) {
+            UiAlerts.error("Issue Uniform", "Quantity must be a whole number.");
+            return;
+        }
+        if (qty <= 0) {
+            UiAlerts.error("Issue Uniform", "Quantity must be greater than zero.");
+            return;
+        }
+        if (qty > selected.quantityOnHand()) {
+            UiAlerts.error("Issue Uniform", "Only " + selected.quantityOnHand() + " available (after pending).");
+            return;
+        }
+        PendingUniformIssue pending = new PendingUniformIssue(
+                nextPendingUniformIssueTempId--,
+                selected.uniformId(),
+                selected.itemName(),
+                selected.category() == null ? "" : selected.category().name(),
+                selected.brand(),
+                selected.model(),
+                selected.sizeName(),
+                qty,
+                selected.unitCost()
+        );
+        pendingUniformIssuesByTempId.put(pending.tempId(), pending);
+        refreshUniforms();
+    }
+
+    @FXML
+    public void onRemoveUniformIssue() {
+        if (uniformIssuedTable == null) {
+            return;
+        }
+        UniformIssuanceDao.UniformIssuanceRow selected = uniformIssuedTable.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            UiAlerts.error("Remove Uniform", "Select a row from the issued list.");
+            return;
+        }
+        if (selected.id() < 0) {
+            // Pending new issue - cancel it.
+            pendingUniformIssuesByTempId.remove(selected.id());
+        } else if (pendingUniformReturnIds.contains(selected.id())) {
+            // Already staged for return - un-stage.
+            pendingUniformReturnIds.remove(selected.id());
+        } else {
+            // Real active issuance - stage for return.
+            pendingUniformReturnIds.add(selected.id());
+        }
+        refreshUniforms();
+    }
+
+    @FXML
+    public void onSaveUniformIssue() {
+        Officer officer = uniformIssueOfficerCombo.getSelectionModel().getSelectedItem();
+        if (officer == null) {
+            UiAlerts.error("Save Uniform", "Select an officer first.");
+            return;
+        }
+        if (pendingUniformIssuesByTempId.isEmpty() && pendingUniformReturnIds.isEmpty()) {
+            UiAlerts.error("Save Uniform", "Nothing staged to save. Use Add to Issue or Remove Selected first.");
+            return;
+        }
+
+        Integer userId = currentUserIdOrNull();
+        List<Integer> newIssuanceIds = new ArrayList<>();
+        for (PendingUniformIssue pending : pendingUniformIssuesByTempId.values()) {
+            int newId = uniformIssuanceDao.issue(
+                    pending.uniformId(),
+                    officer.getOfficerId(),
+                    pending.quantity(),
+                    pending.unitCost(),
+                    userId
+            );
+            if (newId < 0) {
+                UiAlerts.error("Save Uniform",
+                        "Insufficient stock for " + pending.itemName() + ". Some changes were not saved.");
+                break;
+            }
+            newIssuanceIds.add(newId);
+        }
+        for (Integer issuanceId : new ArrayList<>(pendingUniformReturnIds)) {
+            uniformIssuanceDao.returnIssuance(issuanceId, userId);
+        }
+
+        clearPendingUniformChanges();
+        refreshUniforms();
+
+        List<UniformIssuanceDao.UniformIssuanceRow> newlyIssued = uniformIssuanceDao.findByIds(newIssuanceIds);
+        showUniformSignOffSheet(officer, newlyIssued);
+    }
+
+    @FXML
+    public void onPrintUniformSignOff() {
+        Officer officer = uniformIssueOfficerCombo.getSelectionModel().getSelectedItem();
+        if (officer == null) {
+            UiAlerts.error("Print Sign-Off", "Select an officer first.");
+            return;
+        }
+        showUniformSignOffSheet(officer, List.of());
+    }
+
+    private void showUniformSignOffSheet(Officer officer,
+                                         List<UniformIssuanceDao.UniformIssuanceRow> issuedThisAction) {
+        List<UniformIssuanceDao.UniformIssuanceRow> currentIssued =
+                uniformIssuanceDao.findActiveByOfficer(officer.getOfficerId());
+        if (currentIssued.isEmpty() && (issuedThisAction == null || issuedThisAction.isEmpty())) {
+            UiAlerts.info("Print Sign-Off", "Officer has no currently issued uniforms.");
+            return;
+        }
+        String adminName = SessionManager.getCurrentUser() == null
+                ? ""
+                : SessionManager.getCurrentUser().getUsername();
+        boolean opened = WindowsPrintPreview.openHtml(
+                "quartermaster-uniform-signoff-",
+                PrintHtmlFactory.buildUniformIssuancePrintHtml(
+                        getAgencyName(), adminName, officer, currentIssued, issuedThisAction)
+        );
+        if (!opened) {
+            UiAlerts.info("Print Sign-Off",
+                    "Unable to open the print preview window. Please check Windows print settings.");
+        }
+    }
+
+    @FXML
+    public void onAddUniformStock() {
+        UniformStockFormData formData = showUniformStockDialog(null);
+        if (formData == null) {
+            return;
+        }
+        equipmentDao.insertUniformStock(
+                formData.itemName(),
+                formData.category(),
+                formData.brand(),
+                formData.model(),
+                formData.sizeId(),
+                formData.quantityOnHand(),
+                formData.unitCost(),
+                formData.supplier(),
+                formData.storageLocationId(),
+                formData.condition(),
+                formData.status()
+        );
+        refreshUniforms();
+    }
+
+    @FXML
+    public void onEditUniformStock() {
+        EquipmentDao.UniformStockRecord selected = uniformStockTable.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            UiAlerts.error("Uniform Stock", "Select a row to edit.");
+            return;
+        }
+        UniformStockFormData formData = showUniformStockDialog(selected);
+        if (formData == null) {
+            return;
+        }
+        equipmentDao.updateUniformStock(
+                selected.uniformId(),
+                formData.itemName(),
+                formData.category(),
+                formData.brand(),
+                formData.model(),
+                formData.sizeId(),
+                formData.quantityOnHand(),
+                formData.unitCost(),
+                formData.supplier(),
+                formData.storageLocationId(),
+                formData.condition(),
+                formData.status()
+        );
+        refreshUniforms();
+    }
+
+    @FXML
+    public void onDeleteUniformStock() {
+        EquipmentDao.UniformStockRecord selected = uniformStockTable.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            UiAlerts.error("Uniform Stock", "Select a row to delete.");
+            return;
+        }
+        equipmentDao.deleteUniformStock(selected.uniformId());
+        refreshUniforms();
+    }
+
+
 
     private OfficerFormData showOfficerDialog(Officer existing) {
         Dialog<OfficerFormData> dialog = new Dialog<>();
@@ -2417,6 +2987,147 @@ public class AdminController {
         return prefix + "-" + String.format("%03d", index);
     }
 
+    private UniformStockFormData showUniformStockDialog(EquipmentDao.UniformStockRecord existing) {
+        Dialog<UniformStockFormData> dialog = new Dialog<>();
+        dialog.setTitle(existing == null ? "Add Uniform Stock" : "Edit Uniform Stock");
+        UiAlerts.applyTheme(dialog);
+
+        ButtonType saveButton = new ButtonType("Save", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(saveButton, ButtonType.CANCEL);
+
+        TextField itemNameField = new TextField(existing == null ? "" : existing.itemName());
+        ComboBox<UniformCategory> categoryCombo = new ComboBox<>(FXCollections.observableArrayList(UniformCategory.values()));
+        categoryCombo.getSelectionModel().select(existing == null ? UniformCategory.UNIFORM : existing.category());
+        TextField brandField = new TextField(existing == null || existing.brand() == null ? "" : existing.brand());
+        TextField modelField = new TextField(existing == null || existing.model() == null ? "" : existing.model());
+
+        ComboBox<LookupItem> sizeCombo = new ComboBox<>(
+                FXCollections.observableArrayList(lookupDao.findAll(LookupCategory.UNIFORM_SIZES)));
+        sizeCombo.setEditable(true);
+        enableLookupTypeAhead(sizeCombo);
+        if (existing != null) {
+            selectLookupById(sizeCombo, existing.sizeId());
+        }
+
+        TextField quantityField = new TextField(existing == null ? "1" : String.valueOf(existing.quantityOnHand()));
+        TextField unitCostField = new TextField(existing == null || existing.unitCost() == null
+                ? "" : String.format("%.2f", existing.unitCost()));
+        TextField supplierField = new TextField(existing == null || existing.supplier() == null ? "" : existing.supplier());
+
+        ComboBox<LookupItem> storageCombo = new ComboBox<>(
+                FXCollections.observableArrayList(lookupDao.findAll(LookupCategory.STORAGE_LOCATIONS)));
+        storageCombo.setEditable(true);
+        enableLookupTypeAhead(storageCombo);
+        if (existing != null) {
+            selectLookupById(storageCombo, existing.storageLocationId());
+        }
+
+        ComboBox<EquipmentStatus> statusCombo = new ComboBox<>(FXCollections.observableArrayList(EquipmentStatus.values()));
+        statusCombo.getSelectionModel().select(existing == null ? EquipmentStatus.AVAILABLE : existing.status());
+
+        ComboBox<EquipmentCondition> conditionCombo = new ComboBox<>(FXCollections.observableArrayList(EquipmentCondition.values()));
+        conditionCombo.getSelectionModel().select(existing == null ? EquipmentCondition.GOOD : existing.condition());
+
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(10);
+        int row = 0;
+        grid.add(new Label("Item Name"), 0, row);
+        grid.add(itemNameField, 1, row++);
+        grid.add(new Label("Category"), 0, row);
+        grid.add(categoryCombo, 1, row++);
+        grid.add(new Label("Brand"), 0, row);
+        grid.add(brandField, 1, row++);
+        grid.add(new Label("Model"), 0, row);
+        grid.add(modelField, 1, row++);
+        grid.add(new Label("Size"), 0, row);
+        grid.add(sizeCombo, 1, row++);
+        grid.add(new Label("Quantity On Hand"), 0, row);
+        grid.add(quantityField, 1, row++);
+        grid.add(new Label("Unit Cost"), 0, row);
+        grid.add(unitCostField, 1, row++);
+        grid.add(new Label("Supplier"), 0, row);
+        grid.add(supplierField, 1, row++);
+        grid.add(new Label("Storage Location"), 0, row);
+        grid.add(storageCombo, 1, row++);
+        grid.add(new Label("Status"), 0, row);
+        grid.add(statusCombo, 1, row++);
+        grid.add(new Label("Condition"), 0, row);
+        grid.add(conditionCombo, 1, row++);
+
+        dialog.getDialogPane().setContent(grid);
+        dialog.setResultConverter(buttonType -> {
+            if (buttonType != saveButton) {
+                return null;
+            }
+
+            int qty;
+            try {
+                qty = Integer.parseInt(text(quantityField));
+            } catch (NumberFormatException ex) {
+                UiAlerts.error("Uniform Stock", "Quantity must be a whole number.");
+                return null;
+            }
+            if (qty < 0) {
+                UiAlerts.error("Uniform Stock", "Quantity cannot be negative.");
+                return null;
+            }
+
+            Double unitCost = null;
+            String unitCostText = text(unitCostField);
+            if (!unitCostText.isEmpty()) {
+                try {
+                    unitCost = Double.parseDouble(unitCostText);
+                } catch (NumberFormatException ex) {
+                    UiAlerts.error("Uniform Stock", "Unit cost must be numeric.");
+                    return null;
+                }
+                if (unitCost < 0) {
+                    UiAlerts.error("Uniform Stock", "Unit cost cannot be negative.");
+                    return null;
+                }
+            }
+
+            String itemName = text(itemNameField);
+            if (itemName.isEmpty()) {
+                UiAlerts.error("Uniform Stock", "Item name is required.");
+                return null;
+            }
+
+            if (categoryCombo.getValue() == null || statusCombo.getValue() == null || conditionCombo.getValue() == null) {
+                UiAlerts.error("Uniform Stock", "Category, status, and condition are required.");
+                return null;
+            }
+
+            return new UniformStockFormData(
+                    itemName,
+                    categoryCombo.getValue(),
+                    text(brandField),
+                    text(modelField),
+                    selectedId(sizeCombo),
+                    qty,
+                    unitCost,
+                    text(supplierField),
+                    selectedId(storageCombo),
+                    conditionCombo.getValue(),
+                    statusCombo.getValue()
+            );
+        });
+
+        Optional<UniformStockFormData> result = dialog.showAndWait();
+        return result.orElse(null);
+    }
+
+    private String resolveUniformItemName(EquipmentFormData formData) {
+        if (formData.equipmentTypeName() != null && !formData.equipmentTypeName().isBlank()) {
+            return formData.equipmentTypeName().trim();
+        }
+        if (formData.name() != null && !formData.name().isBlank()) {
+            return formData.name().trim();
+        }
+        return "Uniform Item";
+    }
+
     private VehicleFormData showVehicleDialog(Vehicle existing) {
         Dialog<VehicleFormData> dialog = new Dialog<>();
         dialog.setTitle(existing == null ? "Add Vehicle" : "Edit Vehicle");
@@ -2676,6 +3387,19 @@ public class AdminController {
 
     private record VehicleFormData(String unitNumber, Integer vehicleTypeId, String make, String model,
                                    int year, String vin, String plate) {
+    }
+
+    private record UniformStockFormData(String itemName,
+                                        UniformCategory category,
+                                        String brand,
+                                        String model,
+                                        Integer sizeId,
+                                        int quantityOnHand,
+                                        Double unitCost,
+                                        String supplier,
+                                        Integer storageLocationId,
+                                        EquipmentCondition condition,
+                                        EquipmentStatus status) {
     }
 
 }

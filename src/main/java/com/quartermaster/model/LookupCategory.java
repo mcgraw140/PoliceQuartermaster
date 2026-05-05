@@ -11,7 +11,12 @@ public enum LookupCategory {
     CALIBERS("Calibers", "calibers"),
     UNIFORM_SIZES("Uniform Sizes", "uniform_sizes"),
     VEHICLE_TYPES("Vehicle Types", "vehicle_types"),
-    STORAGE_LOCATIONS("Storage Locations", "storage_locations");
+    STORAGE_LOCATIONS("Storage Locations", "storage_locations"),
+    AMMO_MAKES("Ammo Makes", "ammo_makes"),
+    AMMO_MODELS("Ammo Models", "ammo_models"),
+    AMMO_CALIBERS("Ammo Calibers", "ammo_calibers"),
+    AMMO_USES("Ammo Uses", "ammo_uses"),
+    AMMO_REASONS("Ammo Reasons", "ammo_reasons");
 
     private final String displayName;
     private final String tableName;

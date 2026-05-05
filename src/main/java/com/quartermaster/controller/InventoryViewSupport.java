@@ -12,6 +12,12 @@ public final class InventoryViewSupport {
     private InventoryViewSupport() {
     }
 
+    public static List<EquipmentItem> buildInventoryDisplayRows(List<EquipmentItem> filtered,
+                                                                EquipmentBranch activeEquipmentBranch,
+                                                                String selectedStatus) {
+        return filtered;
+    }
+
     public static boolean matchesInventoryFilter(EquipmentItem item,
                                                  boolean showHistorical,
                                                  String selectedStatus,
@@ -45,16 +51,37 @@ public final class InventoryViewSupport {
             return base;
         }
 
-        Map<String, Long> grouped = filtered.stream()
-                .collect(Collectors.groupingBy(EquipmentItem::getCategorySummary, Collectors.counting()));
+        String stockBase = "Showing " + filtered.size() + " uniform stock rows";
+
+        int totalQty = filtered.stream()
+                .mapToInt(item -> Math.max(parseQuantity(item.getSerialNumber()), 0))
+                .sum();
+
+        Map<String, Integer> grouped = filtered.stream()
+            .collect(Collectors.toMap(
+                item -> item.getName() + " " + item.getCategorySummary(),
+                item -> parseQuantity(item.getSerialNumber()),
+                Integer::sum
+            ));
         if (grouped.isEmpty()) {
-            return base;
+            return stockBase;
         }
 
         String breakdown = grouped.entrySet().stream()
                 .sorted(Map.Entry.comparingByKey(String.CASE_INSENSITIVE_ORDER))
                 .map(entry -> entry.getKey() + " x" + entry.getValue())
                 .collect(Collectors.joining(" | "));
-        return base + "\nUniform counts: " + breakdown;
+        return stockBase + "\nTotal uniforms on hand: " + totalQty + "\nUniform counts: " + breakdown;
+    }
+
+    private static int parseQuantity(String serialValue) {
+        if (serialValue == null || serialValue.isBlank()) {
+            return 0;
+        }
+        try {
+            return Integer.parseInt(serialValue.trim());
+        } catch (NumberFormatException ex) {
+            return 0;
+        }
     }
 }

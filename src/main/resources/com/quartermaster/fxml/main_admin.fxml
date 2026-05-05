@@ -31,6 +31,8 @@
                 </VBox>
                 <HBox styleClass="main-module-tabs" spacing="8" alignment="CENTER_RIGHT">
                     <Button fx:id="topTabEquipment"   text="Equipment"    onAction="#onTopTabEquipment"   styleClass="nav-tab"/>
+                    <Button fx:id="topTabUniform"     text="Uniforms"     onAction="#onTopTabUniform"     styleClass="nav-tab"/>
+                    <Button fx:id="topTabAmmunition"  text="Ammunition"   onAction="#onTopTabAmmunition"  styleClass="nav-tab"/>
                     <Button fx:id="topTabIssueReturn" text="Issue / Return" onAction="#onTopTabIssueReturn" styleClass="nav-tab"/>
                     <Button fx:id="topTabAdmin"       text="Admin"        onAction="#onTopTabAdmin"       styleClass="nav-tab"/>
                     <Button fx:id="topTabVehicle"     text="Vehicle"      onAction="#onTopTabVehicle"     styleClass="nav-tab"/>
@@ -212,6 +214,185 @@
                                         <TableColumn fx:id="issueSelectedNameColumn" text="Name" prefWidth="240"/>
                                         <TableColumn fx:id="issueSelectedCategoryColumn" text="Category" prefWidth="210"/>
                                         <TableColumn fx:id="issueSelectedSerialColumn" text="Serial" prefWidth="160"/>
+                                    </columns>
+                                </TableView>
+                            </VBox>
+                        </HBox>
+                    </VBox>
+                </VBox>
+
+                <!-- ===== Uniform pane (Stock + Issue sub-tabs) ===== -->
+                <VBox fx:id="moduleUniformPane" spacing="12" visible="false" managed="false" styleClass="page-content">
+                    <Label fx:id="uniformModuleTitleLabel" text="Uniform Stock" styleClass="page-title"/>
+
+                    <!-- Stock sub-pane -->
+                    <VBox fx:id="uniformStockPane" spacing="12" VBox.vgrow="ALWAYS">
+                        <VBox styleClass="card" spacing="10" VBox.vgrow="ALWAYS">
+                            <HBox alignment="CENTER_LEFT" spacing="10">
+                                <Label text="Uniform Inventory" styleClass="section-title"/>
+                                <Region HBox.hgrow="ALWAYS"/>
+                                <Button text="Add"    onAction="#onAddUniformStock"    styleClass="btn-primary"/>
+                                <Button text="Edit"   onAction="#onEditUniformStock"   styleClass="btn-secondary"/>
+                                <Button text="Delete" onAction="#onDeleteUniformStock" styleClass="btn-danger"/>
+                            </HBox>
+                            <TableView fx:id="uniformStockTable" VBox.vgrow="ALWAYS" styleClass="app-table">
+                                <columns>
+                                    <TableColumn fx:id="uniformItemColumn"     text="Item Name" prefWidth="200"/>
+                                    <TableColumn fx:id="uniformCategoryColumn" text="Category"  prefWidth="120"/>
+                                    <TableColumn fx:id="uniformBrandColumn"    text="Brand"     prefWidth="140"/>
+                                    <TableColumn fx:id="uniformModelColumn"    text="Model"     prefWidth="140"/>
+                                    <TableColumn fx:id="uniformSizeColumn"     text="Size"      prefWidth="80"/>
+                                    <TableColumn fx:id="uniformQtyColumn"      text="Qty"       prefWidth="70"/>
+                                    <TableColumn fx:id="uniformUnitCostColumn" text="Unit Cost" prefWidth="100"/>
+                                    <TableColumn fx:id="uniformSupplierColumn" text="Supplier"  prefWidth="140"/>
+                                    <TableColumn fx:id="uniformStorageColumn"  text="Storage"   prefWidth="140"/>
+                                    <TableColumn fx:id="uniformConditionColumn" text="Condition" prefWidth="100"/>
+                                    <TableColumn fx:id="uniformStatusColumn"   text="Status"    prefWidth="100"/>
+                                </columns>
+                            </TableView>
+                        </VBox>
+                    </VBox>
+
+                    <!-- Issue sub-pane -->
+                    <VBox fx:id="uniformIssuePane" spacing="12" visible="false" managed="false" VBox.vgrow="ALWAYS">
+                        <VBox styleClass="card" spacing="10">
+                            <HBox alignment="CENTER_LEFT" spacing="10">
+                                <Label text="Issue / Return Uniforms" styleClass="section-title"/>
+                                <Region HBox.hgrow="ALWAYS"/>
+                                <Button text="Save Issue / Returns" onAction="#onSaveUniformIssue" styleClass="btn-primary"/>
+                                <Button text="Print Sign-Off" onAction="#onPrintUniformSignOff" styleClass="btn-secondary"/>
+                            </HBox>
+                            <FlowPane hgap="8" vgap="8">
+                                <Label text="Officer"/>
+                                <ComboBox fx:id="uniformIssueOfficerCombo" prefWidth="240"/>
+                                <Label text="Quantity"/>
+                                <TextField fx:id="uniformIssueQtyField" prefWidth="80" text="1"/>
+                                <Button text="Add to Issue" onAction="#onAddUniformIssue" styleClass="btn-secondary"/>
+                            </FlowPane>
+                            <Label text="Stage adds and removes here, then click Save Issue / Returns to commit and print." styleClass="muted"/>
+                        </VBox>
+
+                        <HBox spacing="12" VBox.vgrow="ALWAYS">
+                            <VBox styleClass="card" spacing="8" HBox.hgrow="ALWAYS">
+                                <Label text="Available Stock" styleClass="section-title"/>
+                                <Label text="Select a row, set quantity, click Add to Issue." styleClass="muted"/>
+                                <TableView fx:id="uniformIssueAvailableTable" VBox.vgrow="ALWAYS" styleClass="app-table">
+                                    <columns>
+                                        <TableColumn fx:id="uniformIssueItemColumn"     text="Item Name" prefWidth="180"/>
+                                        <TableColumn fx:id="uniformIssueCategoryColumn" text="Category"  prefWidth="100"/>
+                                        <TableColumn fx:id="uniformIssueBrandColumn"    text="Brand"     prefWidth="120"/>
+                                        <TableColumn fx:id="uniformIssueModelColumn"    text="Model"     prefWidth="120"/>
+                                        <TableColumn fx:id="uniformIssueSizeColumn"     text="Size"      prefWidth="70"/>
+                                        <TableColumn fx:id="uniformIssueQtyColumn"      text="Qty Avail" prefWidth="80"/>
+                                        <TableColumn fx:id="uniformIssueStorageColumn"  text="Storage"   prefWidth="120"/>
+                                    </columns>
+                                </TableView>
+                            </VBox>
+
+                            <VBox styleClass="card" spacing="8" HBox.hgrow="ALWAYS">
+                                <HBox alignment="CENTER_LEFT" spacing="10">
+                                    <Label text="Issued To Selected Officer" styleClass="section-title"/>
+                                    <Region HBox.hgrow="ALWAYS"/>
+                                    <Button text="Remove Selected" onAction="#onRemoveUniformIssue" styleClass="btn-danger"/>
+                                </HBox>
+                                <Label fx:id="uniformIssuedToOfficerLabel" text="Select an officer to view issued uniforms." styleClass="muted"/>
+                                <TableView fx:id="uniformIssuedTable" VBox.vgrow="ALWAYS" styleClass="app-table">
+                                    <columns>
+                                        <TableColumn fx:id="uniformIssuedItemColumn"  text="Item"      prefWidth="180"/>
+                                        <TableColumn fx:id="uniformIssuedSizeColumn"  text="Size"      prefWidth="70"/>
+                                        <TableColumn fx:id="uniformIssuedQtyColumn"   text="Qty"       prefWidth="60"/>
+                                        <TableColumn fx:id="uniformIssuedCostColumn"  text="Unit Cost" prefWidth="90"/>
+                                        <TableColumn fx:id="uniformIssuedDateColumn"  text="Issued"    prefWidth="140"/>
+                                        <TableColumn fx:id="uniformIssuedByColumn"    text="Status"    prefWidth="120"/>
+                                    </columns>
+                                </TableView>
+                            </VBox>
+                        </HBox>
+                    </VBox>
+                </VBox>
+
+                <!-- ===== Ammunition pane (Stock + Issue sub-tabs) ===== -->
+                <VBox fx:id="moduleAmmunitionPane" spacing="12" visible="false" managed="false" styleClass="page-content">
+                    <Label fx:id="ammoModuleTitleLabel" text="Ammunition Stock" styleClass="page-title"/>
+
+                    <!-- Stock sub-pane -->
+                    <VBox fx:id="ammoStockPane" spacing="12" VBox.vgrow="ALWAYS">
+                        <VBox styleClass="card" spacing="10" VBox.vgrow="ALWAYS">
+                            <HBox alignment="CENTER_LEFT" spacing="10">
+                                <Label text="Ammunition Inventory" styleClass="section-title"/>
+                                <Region HBox.hgrow="ALWAYS"/>
+                                <Button text="Add"    onAction="#onAddAmmoStock"    styleClass="btn-primary"/>
+                                <Button text="Edit"   onAction="#onEditAmmoStock"   styleClass="btn-secondary"/>
+                                <Button text="Delete" onAction="#onDeleteAmmoStock" styleClass="btn-danger"/>
+                            </HBox>
+                            <TableView fx:id="ammoStockTable" VBox.vgrow="ALWAYS" styleClass="app-table">
+                                <columns>
+                                    <TableColumn fx:id="ammoMakeColumn"     text="Make"           prefWidth="160"/>
+                                    <TableColumn fx:id="ammoModelColumn"    text="Model"          prefWidth="220"/>
+                                    <TableColumn fx:id="ammoCaliberColumn"  text="Caliber"        prefWidth="100"/>
+                                    <TableColumn fx:id="ammoUseColumn"      text="Use"            prefWidth="110"/>
+                                    <TableColumn fx:id="ammoRoundsColumn"   text="Rounds on Hand" prefWidth="130"/>
+                                    <TableColumn fx:id="ammoUnitCostColumn" text="Unit Cost"      prefWidth="100"/>
+                                    <TableColumn fx:id="ammoStorageColumn"  text="Storage"        prefWidth="140"/>
+                                    <TableColumn fx:id="ammoNotesColumn"    text="Notes"          prefWidth="200"/>
+                                </columns>
+                            </TableView>
+                        </VBox>
+                    </VBox>
+
+                    <!-- Issue sub-pane -->
+                    <VBox fx:id="ammoIssuePane" spacing="12" visible="false" managed="false" VBox.vgrow="ALWAYS">
+                        <VBox styleClass="card" spacing="10">
+                            <HBox alignment="CENTER_LEFT" spacing="10">
+                                <Label text="Issue / Return Ammunition" styleClass="section-title"/>
+                                <Region HBox.hgrow="ALWAYS"/>
+                                <Button text="Save Issue / Returns" onAction="#onSaveAmmoIssue" styleClass="btn-primary"/>
+                                <Button text="Print Sign-Off" onAction="#onPrintAmmoSignOff" styleClass="btn-secondary"/>
+                            </HBox>
+                            <FlowPane hgap="8" vgap="8">
+                                <Label text="Officer"/>
+                                <ComboBox fx:id="ammoIssueOfficerCombo" prefWidth="240"/>
+                                <Label text="Reason"/>
+                                <ComboBox fx:id="ammoIssueReasonCombo" prefWidth="180"/>
+                                <Label text="Rounds"/>
+                                <TextField fx:id="ammoIssueRoundsField" prefWidth="100" text="50"/>
+                                <Button text="Add to Issue" onAction="#onAddAmmoIssue" styleClass="btn-secondary"/>
+                            </FlowPane>
+                            <Label text="Stage adds and returns here, then click Save Issue / Returns to commit and print." styleClass="muted"/>
+                        </VBox>
+
+                        <HBox spacing="12" VBox.vgrow="ALWAYS">
+                            <VBox styleClass="card" spacing="8" HBox.hgrow="ALWAYS">
+                                <Label text="Available Stock" styleClass="section-title"/>
+                                <Label text="Select a row, set rounds + reason, click Add to Issue." styleClass="muted"/>
+                                <TableView fx:id="ammoIssueAvailableTable" VBox.vgrow="ALWAYS" styleClass="app-table">
+                                    <columns>
+                                        <TableColumn fx:id="ammoIssueMakeColumn"    text="Make"     prefWidth="140"/>
+                                        <TableColumn fx:id="ammoIssueModelColumn"   text="Model"    prefWidth="180"/>
+                                        <TableColumn fx:id="ammoIssueCaliberColumn" text="Caliber"  prefWidth="90"/>
+                                        <TableColumn fx:id="ammoIssueUseColumn"     text="Use"      prefWidth="100"/>
+                                        <TableColumn fx:id="ammoIssueRoundsColumn"  text="Rounds"   prefWidth="90"/>
+                                        <TableColumn fx:id="ammoIssueStorageColumn" text="Storage"  prefWidth="120"/>
+                                    </columns>
+                                </TableView>
+                            </VBox>
+
+                            <VBox styleClass="card" spacing="8" HBox.hgrow="ALWAYS">
+                                <HBox alignment="CENTER_LEFT" spacing="10">
+                                    <Label text="Issued To Selected Officer" styleClass="section-title"/>
+                                    <Region HBox.hgrow="ALWAYS"/>
+                                    <Button text="Remove Selected" onAction="#onRemoveAmmoIssue" styleClass="btn-danger"/>
+                                </HBox>
+                                <Label fx:id="ammoIssuedToOfficerLabel" text="Select an officer to view issued ammunition." styleClass="muted"/>
+                                <TableView fx:id="ammoIssuedTable" VBox.vgrow="ALWAYS" styleClass="app-table">
+                                    <columns>
+                                        <TableColumn fx:id="ammoIssuedMakeColumn"    text="Make"     prefWidth="140"/>
+                                        <TableColumn fx:id="ammoIssuedModelColumn"   text="Model"    prefWidth="160"/>
+                                        <TableColumn fx:id="ammoIssuedCaliberColumn" text="Caliber"  prefWidth="80"/>
+                                        <TableColumn fx:id="ammoIssuedRoundsColumn"  text="Rounds"   prefWidth="80"/>
+                                        <TableColumn fx:id="ammoIssuedReasonColumn"  text="Reason"   prefWidth="120"/>
+                                        <TableColumn fx:id="ammoIssuedDateColumn"    text="Issued"   prefWidth="140"/>
+                                        <TableColumn fx:id="ammoIssuedStatusColumn"  text="Status"   prefWidth="120"/>
                                     </columns>
                                 </TableView>
                             </VBox>

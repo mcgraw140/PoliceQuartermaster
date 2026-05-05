@@ -65,6 +65,35 @@ CREATE TABLE IF NOT EXISTS storage_locations (
     name VARCHAR(100) NOT NULL UNIQUE
 );
 
+CREATE TABLE IF NOT EXISTS uniform_inventory (
+    uniform_id INT AUTO_INCREMENT PRIMARY KEY,
+    item_name VARCHAR(100) NOT NULL,
+    category ENUM('UNIFORM','OUTERWEAR','FOOTWEAR','GEAR') NOT NULL DEFAULT 'UNIFORM',
+    brand VARCHAR(100) NULL,
+    model VARCHAR(100) NULL,
+    size_id INT NULL,
+    quantity_on_hand INT NOT NULL DEFAULT 0,
+    unit_cost DECIMAL(10,2) NULL,
+    supplier VARCHAR(150) NULL,
+    storage_location_id INT NULL,
+    status ENUM('AVAILABLE','ISSUED','MAINTENANCE','RETIRED','DESTROYED') NOT NULL DEFAULT 'AVAILABLE',
+    `condition` ENUM('NEW','GOOD','FAIR','POOR') NOT NULL DEFAULT 'GOOD',
+    CONSTRAINT fk_uniform_size FOREIGN KEY (size_id) REFERENCES uniform_sizes(id) ON DELETE SET NULL,
+    CONSTRAINT fk_uniform_storage FOREIGN KEY (storage_location_id) REFERENCES storage_locations(id) ON DELETE SET NULL
+);
+
+ALTER TABLE uniform_inventory ADD COLUMN IF NOT EXISTS item_name VARCHAR(100) NOT NULL;
+ALTER TABLE uniform_inventory ADD COLUMN IF NOT EXISTS category ENUM('UNIFORM','OUTERWEAR','FOOTWEAR','GEAR') NOT NULL DEFAULT 'UNIFORM';
+ALTER TABLE uniform_inventory ADD COLUMN IF NOT EXISTS brand VARCHAR(100) NULL;
+ALTER TABLE uniform_inventory ADD COLUMN IF NOT EXISTS model VARCHAR(100) NULL;
+ALTER TABLE uniform_inventory ADD COLUMN IF NOT EXISTS size_id INT NULL;
+ALTER TABLE uniform_inventory ADD COLUMN IF NOT EXISTS quantity_on_hand INT NOT NULL DEFAULT 0;
+ALTER TABLE uniform_inventory ADD COLUMN IF NOT EXISTS unit_cost DECIMAL(10,2) NULL;
+ALTER TABLE uniform_inventory ADD COLUMN IF NOT EXISTS supplier VARCHAR(150) NULL;
+ALTER TABLE uniform_inventory ADD COLUMN IF NOT EXISTS storage_location_id INT NULL;
+ALTER TABLE uniform_inventory ADD COLUMN IF NOT EXISTS status ENUM('AVAILABLE','ISSUED','MAINTENANCE','RETIRED','DESTROYED') NOT NULL DEFAULT 'AVAILABLE';
+ALTER TABLE uniform_inventory ADD COLUMN IF NOT EXISTS `condition` ENUM('NEW','GOOD','FAIR','POOR') NOT NULL DEFAULT 'GOOD';
+
 -- ---- Equipment ----------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS equipment_items (
@@ -134,6 +163,104 @@ CREATE TABLE IF NOT EXISTS issuances (
 
 ALTER TABLE issuances ADD COLUMN IF NOT EXISTS issued_by_user_id INT NULL;
 ALTER TABLE issuances ADD COLUMN IF NOT EXISTS returned_by_user_id INT NULL;
+
+CREATE TABLE IF NOT EXISTS uniform_issuances (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    uniform_id INT NOT NULL,
+    officer_id INT NOT NULL,
+    quantity INT NOT NULL,
+    unit_cost_at_issue DECIMAL(10,2) NULL,
+    issued_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    issued_by_user_id INT NULL,
+    returned_at DATETIME NULL,
+    returned_by_user_id INT NULL,
+    status ENUM('ISSUED','RETURNED','LOST','DAMAGED') NOT NULL DEFAULT 'ISSUED',
+    notes VARCHAR(500) NULL,
+    CONSTRAINT fk_ui_uniform FOREIGN KEY (uniform_id) REFERENCES uniform_inventory(uniform_id)
+        ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT fk_ui_officer FOREIGN KEY (officer_id) REFERENCES officers(officer_id)
+        ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT fk_ui_issued_by FOREIGN KEY (issued_by_user_id) REFERENCES users(user_id)
+        ON DELETE SET NULL ON UPDATE CASCADE,
+    CONSTRAINT fk_ui_returned_by FOREIGN KEY (returned_by_user_id) REFERENCES users(user_id)
+        ON DELETE SET NULL ON UPDATE CASCADE
+);
+
+-- ---- Ammunition ---------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS ammo_makes (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE
+);
+
+CREATE TABLE IF NOT EXISTS ammo_models (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(150) NOT NULL UNIQUE
+);
+
+CREATE TABLE IF NOT EXISTS ammo_calibers (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(50) NOT NULL UNIQUE
+);
+
+CREATE TABLE IF NOT EXISTS ammo_uses (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(80) NOT NULL UNIQUE
+);
+
+CREATE TABLE IF NOT EXISTS ammo_reasons (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE
+);
+
+INSERT IGNORE INTO ammo_uses (name) VALUES ('Duty'), ('Training'), ('N/A');
+INSERT IGNORE INTO ammo_reasons (name) VALUES
+    ('Duty'), ('Off Duty'), ('Order Received'), ('Partial Order Received'),
+    ('Qualification'), ('Replenish Stock'), ('Returned to Inventory'),
+    ('Stock Adjustment'), ('Training');
+
+CREATE TABLE IF NOT EXISTS ammunition_inventory (
+    ammo_id INT AUTO_INCREMENT PRIMARY KEY,
+    make_id INT NULL,
+    model_id INT NULL,
+    caliber_id INT NULL,
+    use_id INT NULL,
+    rounds_on_hand INT NOT NULL DEFAULT 0,
+    unit_cost DECIMAL(10,2) NULL,
+    storage_location_id INT NULL,
+    notes VARCHAR(500) NULL,
+    status ENUM('ACTIVE','ARCHIVED') NOT NULL DEFAULT 'ACTIVE',
+    CONSTRAINT fk_ammo_make    FOREIGN KEY (make_id)    REFERENCES ammo_makes(id)        ON DELETE SET NULL,
+    CONSTRAINT fk_ammo_model   FOREIGN KEY (model_id)   REFERENCES ammo_models(id)       ON DELETE SET NULL,
+    CONSTRAINT fk_ammo_caliber FOREIGN KEY (caliber_id) REFERENCES ammo_calibers(id)     ON DELETE SET NULL,
+    CONSTRAINT fk_ammo_use     FOREIGN KEY (use_id)     REFERENCES ammo_uses(id)         ON DELETE SET NULL,
+    CONSTRAINT fk_ammo_storage FOREIGN KEY (storage_location_id) REFERENCES storage_locations(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS ammunition_issuances (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    ammo_id INT NOT NULL,
+    officer_id INT NOT NULL,
+    rounds INT NOT NULL,
+    reason_id INT NULL,
+    unit_cost_at_issue DECIMAL(10,2) NULL,
+    issued_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    issued_by_user_id INT NULL,
+    returned_at DATETIME NULL,
+    returned_by_user_id INT NULL,
+    status ENUM('ISSUED','RETURNED','EXPENDED') NOT NULL DEFAULT 'ISSUED',
+    notes VARCHAR(500) NULL,
+    CONSTRAINT fk_ai_ammo FOREIGN KEY (ammo_id) REFERENCES ammunition_inventory(ammo_id)
+        ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT fk_ai_officer FOREIGN KEY (officer_id) REFERENCES officers(officer_id)
+        ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT fk_ai_reason FOREIGN KEY (reason_id) REFERENCES ammo_reasons(id)
+        ON DELETE SET NULL ON UPDATE CASCADE,
+    CONSTRAINT fk_ai_issued_by FOREIGN KEY (issued_by_user_id) REFERENCES users(user_id)
+        ON DELETE SET NULL ON UPDATE CASCADE,
+    CONSTRAINT fk_ai_returned_by FOREIGN KEY (returned_by_user_id) REFERENCES users(user_id)
+        ON DELETE SET NULL ON UPDATE CASCADE
+);
 
 -- ---- Fleet --------------------------------------------------------------
 
@@ -275,3 +402,4 @@ SELECT w.item_id, a.item_id
 FROM equipment_items w
 JOIN equipment_items a ON a.serial_number = 'ATT-OPT-0001'
 WHERE w.serial_number = 'WPN-G17-0001';
+
